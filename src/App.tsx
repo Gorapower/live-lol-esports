@@ -8,6 +8,7 @@ import {LiveGames} from "./components/LiveGameCard/LiveGames";
 import {Navbar} from "./components/Navbar/Navbar";
 import { useTheme } from './theme/ThemeContext'
 import React from "react";
+import {SeriesScoreboardTest} from "./components/LiveStatusGameCard/SeriesScoreboardTest";
 
 function App() {
     const { theme } = useTheme();
@@ -20,6 +21,7 @@ function App() {
                     <Routes>
                         <Route path="/" element={<LiveGames/>}/>
                         <Route path="/live/:gameid" element={<LiveGame/>}/>
+                        <Route path="/test-series-scoreboard" element={<SeriesScoreboardTest/>}/>
                         <Route path="*" element={<Navigate to="/"/>}/>
                     </Routes>
                 </div>

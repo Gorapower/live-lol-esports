@@ -12,6 +12,7 @@ import { GameDetails } from "./types/detailsPersistentTypes";
 import { useParams } from "react-router-dom";
 import { useFrameIndex } from "./useFrameIndex";
 import { TimelineScrubber } from "./TimelineScrubber";
+import { SeriesScoreboard } from "./SeriesScoreboard";
 
 export function LiveGame() {
     const [gameData, setGameData] = useState<GameDetails>();
@@ -127,34 +128,25 @@ export function LiveGame() {
         [gameData, selectedGameNumber]
     );
 
-    const gameSelector = useMemo(() => {
-        if (!gameData) return null;
+    // Replace the old game selector with the new SeriesScoreboard
+    const seriesScoreboard = useMemo(() => {
+        if (!gameData || selectedGameNumber === undefined) return null;
         return (
-            <div className="game-selector">
-                {gameData.data.event.match.games.map((g) => (
-                    <button
-                        key={g.id}
-                        className={`game-selector-button ${
-                            g.number === selectedGameNumber ? "selected" : ""
-                        }`}
-                        onClick={() => handleGameSelection(g.number)}
-                        title={`Game ${g.number} — ${g.state}`}
-                    >
-                        Game {g.number}
-                        {g.state === "inProgress" || g.state === "in_game" ? " · LIVE" : ""}
-                    </button>
-                ))}
-            </div>
+            <SeriesScoreboard
+                gameDetails={gameData}
+                selectedGameNumber={selectedGameNumber}
+                onGameSelect={handleGameSelection}
+            />
         );
-    }, [gameData, handleGameSelection, selectedGameNumber]);
+    }, [gameData, selectedGameNumber, handleGameSelection]);
 
     // Use metadata from the hook
     const metadata = currentMetadata;
 
     return (
         <div>
-            {/* Game selector (series) */}
-            {gameSelector}
+            {/* Series Scoreboard */}
+            {seriesScoreboard}
 
             {/* Timeline Scrubber */}
             {selectedGameId && (

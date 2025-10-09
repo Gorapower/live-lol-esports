@@ -326,3 +326,44 @@ This file tracks development tasks for new functionality. Each task includes sco
   - Surfacing advanced drawer in the mobile simple mode (to be reconsidered later).
   - Persisting drawer-open state between sessions.
   - Adding new data fields beyond those already retrieved from live details frames.
+
+---
+
+## Task 7 — Live Backfill Data Toggle
+
+- Goal: Add a global toggle (next to the existing theme and sound switches) that enables users to disable frame backfilling when they prefer a live-only experience with reduced data usage.
+
+- Why it matters
+  - Continuous backfill requests can consume significant bandwidth for users on limited data plans.
+  - Providing an explicit user choice prevents surprise data usage without removing the feature for power users who want the full timeline.
+  - Keeps the UI consistent with other quick settings toggles already present in the app.
+
+- Task tree
+  - **Settings toggle**
+    - Introduce a UI control in the global settings/header region alongside theme/sound toggles.
+    - Persist the toggle state in existing preferences storage (local storage or context) so it survives navigation and reloads.
+  - **Hook integration**
+    - Update `useFrameIndex` to read the toggle state and bypass historical backfill when disabled.
+    - Ensure live polling for the most recent frame continues regardless of toggle state.
+    - When the toggle changes from off → on mid-session, trigger a backfill kick-off from the current latest frame.
+  - **UI feedback**
+    - Reflect the disabled state in components relying on historical data (`TimelineScrubber`, playback controls) by disabling or marking them as “Live Only”.
+    - Provide tooltip or inline explanation indicating that backfill is off to avoid confusion.
+  - **Data safeguards**
+    - Double-check that disabling backfill cancels in-flight backfill requests and clears related timers.
+    - Avoid unnecessary cache growth by skipping storage of partial historical frames when the toggle is off.
+  - **Testing & analytics**
+    - Add unit coverage for the hook’s new toggle pathway (no backfill, re-enable flow).
+    - Optionally instrument toggle usage to understand adoption (behind feature flag).
+
+- Acceptance criteria
+  - Toggle defaults to “on” (current behavior) and sits with theme/sound switches.
+  - When disabled before opening a game, the app only fetches live frames and never schedules backward backfill requests.
+  - Toggling off during an active session stops any ongoing backfill within one cycle and prevents new backfill requests.
+  - Re-enabling backfill resumes historical loading starting from the current earliest cached timestamp.
+  - UI elements that depend on historical frames clearly communicate when backfill is disabled.
+
+- Out of scope
+  - Per-game or per-tab overrides beyond the single global toggle.
+  - Bandwidth throttling or metered usage tracking.
+  - Persisting toggle state to server-side profiles.
