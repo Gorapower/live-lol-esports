@@ -33,8 +33,19 @@ export function LiveGame() {
         isLive,
         isFinal,
         selectedTimestamp,
+        currentTimestamp,
         goLive,
         setPlaybackByEpoch,
+        
+        // Live playback controls
+        isLivePaused,
+        desiredLagMs,
+        speedFactor,
+        displayedTs,
+        pauseLive,
+        resumeLive,
+        setDesiredLagMs,
+        setSpeedFactor,
     } = useFrameIndex(selectedGameId || "");
 
     const selectedGameState = useMemo(() => {
@@ -157,6 +168,16 @@ export function LiveGame() {
                     onLive={goLive}
                     disabled={!hasFirstFrame}
                     isBackfilling={isBackfilling}
+                    
+                    // Live playback props
+                    isLivePaused={isLivePaused}
+                    desiredLagMs={desiredLagMs}
+                    speedFactor={speedFactor}
+                    displayedTs={displayedTs}
+                    pauseLive={pauseLive}
+                    resumeLive={resumeLive}
+                    setDesiredLagMs={setDesiredLagMs}
+                    setSpeedFactor={setSpeedFactor}
                 />
             )}
 

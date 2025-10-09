@@ -25,6 +25,13 @@ interface FrameIndexState {
   playbackPointer: number | null;
   metadata: GameMetadata | undefined;
   isFinal: boolean; // New flag to indicate if the game is finished
+  
+  // Live playback state
+  isLivePaused: boolean;
+  desiredLagMs: number;
+  speedFactor: number;
+  displayIndex: number;
+  playQueue: number[];
 }
 
 interface FrameIndexReturn {
@@ -40,6 +47,16 @@ interface FrameIndexReturn {
   currentTimestamp: number | null;
   goLive: () => void;
   setPlaybackByEpoch: (epoch: number) => void;
+  
+  // Live playback controls
+  isLivePaused: boolean;
+  desiredLagMs: number;
+  speedFactor: number;
+  displayedTs: number | null;
+  pauseLive: () => void;
+  resumeLive: () => void;
+  setDesiredLagMs: (ms: number) => void;
+  setSpeedFactor: (factor: number) => void;
 }
 
 interface MergeResult {
@@ -47,6 +64,7 @@ interface MergeResult {
   addedEarlier: boolean;
   addedLater: boolean;
   hasFramesAfter: boolean;
+  newTimestamps: number[];
 }
 
 const BACKFILL_STEP_MS = 10_000;
@@ -54,6 +72,13 @@ const BACKFILL_DELAY_MS = 200;
 const BACKFILL_RETRY_DELAY_MS = 1_000;
 const LIVE_POLL_INTERVAL_MS = 500;
 const FINAL_STATE_BACKOFF_MS = 60_000; // 1 minute backoff for finished games
+
+// Live playback constants
+const DEFAULT_DESIRED_LAG_MS = 10_000; // 10 seconds behind live
+const MIN_FRAME_MS = 150; // Minimum time between frames
+const MAX_FRAME_MS = 4000; // Maximum time between frames
+const DRIFT_CHECK_INTERVAL_MS = 5000; // Check drift every 5 seconds
+const MAX_SPEED_FACTOR = 2.0; // Maximum playback speed
 
 // Debug logging flag
 const DEBUG_POLLING = process.env.NODE_ENV === 'development';
@@ -68,6 +93,13 @@ const createInitialState = (): FrameIndexState => ({
   playbackPointer: null,
   metadata: undefined,
   isFinal: false,
+  
+  // Live playback state
+  isLivePaused: false,
+  desiredLagMs: DEFAULT_DESIRED_LAG_MS,
+  speedFactor: 1.0,
+  displayIndex: -1,
+  playQueue: [],
 });
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -95,6 +127,12 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
   const backfillCursorRef = useRef<number | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const finalStateBackoffRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Live playback refs
+  const schedulerTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const anchorWallRef = useRef<number>(Date.now());
+  const anchorTsRef = useRef<number>(0);
+  const driftCheckTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -112,6 +150,15 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
         clearTimeout(finalStateBackoffRef.current);
         finalStateBackoffRef.current = null;
       }
+      // Clean up scheduler timers
+      if (schedulerTimerRef.current) {
+        clearTimeout(schedulerTimerRef.current);
+        schedulerTimerRef.current = null;
+      }
+      if (driftCheckTimerRef.current) {
+        clearInterval(driftCheckTimerRef.current);
+        driftCheckTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -125,12 +172,13 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
       let addedEarlier = false;
       let addedLater = false;
       let hasFramesAfter = stateRef.current.orderedTimestamps.length > 0;
+      const newLaterFrames = new Set<number>();
 
       const hasPayload = windowFrames.length > 0 || detailFrames.length > 0;
       const shouldSetMetadata = Boolean(metadata && !stateRef.current.metadata);
 
       if (!hasPayload && !shouldSetMetadata) {
-        return { changed: false, addedEarlier: false, addedLater: false, hasFramesAfter };
+        return { changed: false, addedEarlier: false, addedLater: false, hasFramesAfter, newTimestamps: [] };
       }
 
       // Check if any of the new frames indicate a terminal game state
@@ -146,15 +194,33 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
         const nextWindow = new Map(prev.framesWindow);
         const nextDetails = new Map(prev.framesDetails);
         const timestampSet = new Set(prev.orderedTimestamps);
+        const prevLatestTs =
+          prev.orderedTimestamps.length > 0
+            ? prev.orderedTimestamps[prev.orderedTimestamps.length - 1]
+            : null;
+        const prevDisplayTs =
+          prev.displayIndex >= 0 && prev.displayIndex < prev.orderedTimestamps.length
+            ? prev.orderedTimestamps[prev.displayIndex]
+            : null;
 
         windowFrames.forEach((frame) => {
           const epoch = toEpochMillis(frame.rfc460Timestamp);
+          if (!prev.framesWindow.has(epoch) && !prev.framesDetails.has(epoch)) {
+            if (prevLatestTs === null || epoch > prevLatestTs) {
+              newLaterFrames.add(epoch);
+            }
+          }
           nextWindow.set(epoch, frame);
           timestampSet.add(epoch);
         });
 
         detailFrames.forEach((frame) => {
           const epoch = toEpochMillis(frame.rfc460Timestamp);
+          if (!prev.framesWindow.has(epoch) && !prev.framesDetails.has(epoch)) {
+            if (prevLatestTs === null || epoch > prevLatestTs) {
+              newLaterFrames.add(epoch);
+            }
+          }
           nextDetails.set(epoch, frame);
           timestampSet.add(epoch);
         });
@@ -208,6 +274,25 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
           }
         }
 
+        // Keep display index within bounds and initialize when we first get data
+        let displayIndex = prev.displayIndex;
+        if (sortedTimestamps.length === 0) {
+          displayIndex = -1;
+        } else {
+          if (prevDisplayTs !== null) {
+            const newIndex = sortedTimestamps.indexOf(prevDisplayTs);
+            if (newIndex !== -1) {
+              displayIndex = newIndex;
+            }
+          }
+          if (displayIndex >= sortedTimestamps.length) {
+            displayIndex = sortedTimestamps.length - 1;
+          }
+          if (displayIndex < 0 && playbackPointer === null && livePointer >= 0) {
+            displayIndex = livePointer;
+          }
+        }
+
         changed = true;
         addedEarlier =
           sortedTimestamps.length > 0 &&
@@ -227,12 +312,15 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
           orderedTimestamps: sortedTimestamps,
           livePointer,
           playbackPointer,
+          displayIndex,
           metadata: metadataToUse,
           isFinal: nextIsFinal,
         };
       });
 
-      return { changed, addedEarlier, addedLater, hasFramesAfter };
+      const newTimestamps = Array.from(newLaterFrames).sort((a, b) => a - b);
+
+      return { changed, addedEarlier, addedLater, hasFramesAfter, newTimestamps };
     },
     [setFrameState]
   );
@@ -249,6 +337,186 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
     });
     backfillCursorRef.current = null;
   }, [setFrameState]);
+
+  // Live playback scheduler functions
+  const stopScheduler = useCallback(() => {
+    if (schedulerTimerRef.current) {
+      clearTimeout(schedulerTimerRef.current);
+      schedulerTimerRef.current = null;
+    }
+    if (driftCheckTimerRef.current) {
+      clearInterval(driftCheckTimerRef.current);
+      driftCheckTimerRef.current = null;
+    }
+  }, []);
+
+  const showNextFrame = useCallback(() => {
+    if (!isMountedRef.current) return;
+
+    setFrameState(prev => {
+      if (prev.playQueue.length === 0 || prev.isLivePaused || prev.playbackPointer !== null) {
+        return prev;
+      }
+
+      const nextIndex = prev.playQueue[0];
+      const newPlayQueue = prev.playQueue.slice(1);
+      
+      return {
+        ...prev,
+        displayIndex: nextIndex,
+        playQueue: newPlayQueue
+      };
+    });
+  }, []);
+
+  const scheduleNextFrame = useCallback(() => {
+    if (!isMountedRef.current) return;
+
+    const currentState = stateRef.current;
+    if (
+      currentState.playQueue.length === 0 ||
+      currentState.isLivePaused ||
+      currentState.playbackPointer !== null
+    ) {
+      schedulerTimerRef.current = null;
+      return;
+    }
+
+    const nextIndex = currentState.playQueue[0];
+    const nextTs = currentState.orderedTimestamps[nextIndex];
+
+    if (nextTs === undefined) {
+      schedulerTimerRef.current = null;
+      return;
+    }
+
+    const previousIndex =
+      currentState.displayIndex >= 0
+        ? currentState.displayIndex
+        : nextIndex - 1;
+    const previousTs =
+      previousIndex >= 0
+        ? currentState.orderedTimestamps[previousIndex]
+        : undefined;
+
+    const rawDelta = previousTs !== undefined ? nextTs - previousTs : MIN_FRAME_MS;
+    const adjustedDelta =
+      rawDelta > 0 ? rawDelta / currentState.speedFactor : MIN_FRAME_MS;
+    const dt = Math.max(
+      MIN_FRAME_MS,
+      Math.min(MAX_FRAME_MS, adjustedDelta)
+    );
+
+    schedulerTimerRef.current = setTimeout(() => {
+      showNextFrame();
+      scheduleNextFrame();
+    }, dt);
+  }, [showNextFrame]);
+
+  const startScheduler = useCallback(() => {
+    if (schedulerTimerRef.current !== null) return; // Already running
+
+    // Set up anchors for timing calculation
+    const now = Date.now();
+    anchorWallRef.current = now;
+    
+    const currentState = stateRef.current;
+    if (currentState.orderedTimestamps.length > 0) {
+      // Use the timestamp of the frame we're currently displaying as anchor
+      const displayTs = currentState.displayIndex >= 0 ?
+        currentState.orderedTimestamps[currentState.displayIndex] :
+        currentState.orderedTimestamps[0];
+      anchorTsRef.current = displayTs;
+    }
+
+    // Start drift checking
+    if (driftCheckTimerRef.current) {
+      clearInterval(driftCheckTimerRef.current);
+    }
+    
+    driftCheckTimerRef.current = setInterval(() => {
+      if (!isMountedRef.current || stateRef.current.isLivePaused || stateRef.current.playbackPointer !== null) {
+        return;
+      }
+
+      const currentState = stateRef.current;
+      if (currentState.orderedTimestamps.length === 0 || currentState.displayIndex < 0) return;
+
+      const displayedTs = currentState.orderedTimestamps[currentState.displayIndex];
+      const latestTs = currentState.orderedTimestamps[currentState.orderedTimestamps.length - 1];
+      const currentLag = latestTs - displayedTs;
+
+      // Adjust speed factor if we're drifting too far from target lag
+      if (currentLag > currentState.desiredLagMs + 5000) {
+        // We're too far behind, increase speed
+        setFrameState(prev => ({
+          ...prev,
+          speedFactor: Math.min(MAX_SPEED_FACTOR, prev.speedFactor * 1.1)
+        }));
+      } else if (currentLag < currentState.desiredLagMs - 2000) {
+        // We're too far ahead, pause briefly
+        setFrameState(prev => ({
+          ...prev,
+          speedFactor: Math.max(0.5, prev.speedFactor * 0.9)
+        }));
+      } else if (Math.abs(currentLag - currentState.desiredLagMs) < 1000) {
+        // We're close to target, reset to normal speed
+        setFrameState(prev => ({
+          ...prev,
+          speedFactor: 1.0
+        }));
+      }
+    }, DRIFT_CHECK_INTERVAL_MS);
+
+    scheduleNextFrame();
+  }, [scheduleNextFrame]);
+
+  const addToPlayQueue = useCallback((newTimestamps: number[]) => {
+    if (!isMountedRef.current) return;
+
+    setFrameState(prev => {
+      if (prev.playbackPointer !== null) return prev; // Don't queue in scrub mode
+
+      const lastQueuedIndex = prev.playQueue.length > 0 ?
+        prev.playQueue[prev.playQueue.length - 1] :
+        prev.displayIndex;
+
+      const newIndices: number[] = [];
+      for (const ts of newTimestamps) {
+        const index = prev.orderedTimestamps.indexOf(ts);
+        if (index > lastQueuedIndex) {
+          newIndices.push(index);
+        }
+      }
+
+      const combinedQueue = [...prev.playQueue, ...newIndices];
+      const uniqueQueue = Array.from(new Set(combinedQueue)).sort((a, b) => a - b);
+
+      return {
+        ...prev,
+        playQueue: uniqueQueue
+      };
+    });
+  }, []);
+
+  // Live playback control functions
+  const pauseLive = useCallback(() => {
+    stopScheduler();
+    setFrameState(prev => ({ ...prev, isLivePaused: true }));
+  }, [stopScheduler]);
+
+  const resumeLive = useCallback(() => {
+    setFrameState(prev => ({ ...prev, isLivePaused: false }));
+    startScheduler();
+  }, [startScheduler]);
+
+  const setDesiredLagMs = useCallback((ms: number) => {
+    setFrameState(prev => ({ ...prev, desiredLagMs: ms }));
+  }, []);
+
+  const setSpeedFactor = useCallback((factor: number) => {
+    setFrameState(prev => ({ ...prev, speedFactor: Math.max(0.5, Math.min(MAX_SPEED_FACTOR, factor)) }));
+  }, []);
 
   const fetchChunk = useCallback(
     async (startingTime: string) => {
@@ -444,6 +712,23 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
           maybeStartBackfill();
         }
         
+        // Add new frames to play queue
+        if (
+          mergeResult.changed &&
+          mergeResult.addedLater &&
+          mergeResult.newTimestamps.length > 0
+        ) {
+          addToPlayQueue(mergeResult.newTimestamps);
+        }
+        
+        // Start scheduler if we have frames and we're in live mode
+        if (stateRef.current.orderedTimestamps.length > 0 &&
+            stateRef.current.playbackPointer === null &&
+            !stateRef.current.isLivePaused &&
+            schedulerTimerRef.current === null) {
+          startScheduler();
+        }
+        
         // If after merging frames we detect a terminal state, stop polling
         if (stateRef.current.isFinal && pollIntervalRef.current) {
           if (DEBUG_POLLING) {
@@ -530,9 +815,21 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
       if (prev.playbackPointer === null) {
         return prev;
       }
-      return { ...prev, playbackPointer: null };
+      // Reset display index to latest and resume live playback
+      const { ...rest } = prev;
+      return {
+        ...prev,
+        playbackPointer: null,
+        displayIndex: prev.livePointer,
+        isLivePaused: false
+      };
     });
-  }, [setFrameState]);
+    
+    // Start the scheduler when going live
+    if (schedulerTimerRef.current === null) {
+      startScheduler();
+    }
+  }, [startScheduler]);
 
   const setPlaybackByEpoch = useCallback(
     (epoch: number) => {
@@ -547,14 +844,26 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
         if (prev.playbackPointer === index) {
           return prev;
         }
-        return { ...prev, playbackPointer: index };
+        // Stop scheduler when switching to scrub mode
+        stopScheduler();
+        return {
+          ...prev,
+          playbackPointer: index,
+          displayIndex: index
+        };
       });
     },
-    [setFrameState]
+    [setFrameState, stopScheduler]
   );
 
+  // Determine the current index based on mode
   const currentIndex =
-    state.playbackPointer !== null ? state.playbackPointer : state.livePointer;
+    state.playbackPointer !== null
+      ? state.playbackPointer
+      : state.displayIndex >= 0
+        ? state.displayIndex
+        : state.livePointer;
+    
   const currentTimestamp =
     currentIndex >= 0 && currentIndex < state.orderedTimestamps.length
       ? state.orderedTimestamps[currentIndex]
@@ -589,6 +898,11 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
       ? state.orderedTimestamps[state.playbackPointer] ?? null
       : null;
 
+  const displayedTs =
+    state.displayIndex >= 0 && state.displayIndex < state.orderedTimestamps.length
+      ? state.orderedTimestamps[state.displayIndex]
+      : null;
+
   return {
     currentWindow,
     currentDetails,
@@ -602,5 +916,15 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
     currentTimestamp,
     goLive,
     setPlaybackByEpoch,
+    
+    // Live playback controls
+    isLivePaused: state.isLivePaused,
+    desiredLagMs: state.desiredLagMs,
+    speedFactor: state.speedFactor,
+    displayedTs,
+    pauseLive,
+    resumeLive,
+    setDesiredLagMs,
+    setSpeedFactor,
   };
 }

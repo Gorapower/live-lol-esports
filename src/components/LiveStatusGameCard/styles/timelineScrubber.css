@@ -11,6 +11,8 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .timeline-live-button {
@@ -99,4 +101,90 @@
 
 .timeline-slider:disabled::-moz-range-thumb {
   cursor: not-allowed;
+}
+
+/* Live playback controls */
+.timeline-pause-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 5px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.timeline-pause-button:hover:not(:disabled) {
+  background-color: var(--primary-color-hover);
+}
+
+.timeline-pause-button.paused {
+  background-color: var(--warning-color);
+}
+
+.timeline-pause-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.timeline-speed-container {
+  position: relative;
+}
+
+.timeline-speed-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 5px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.timeline-speed-button:hover:not(:disabled) {
+  background-color: var(--primary-color-hover);
+}
+
+.timeline-speed-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.timeline-speed-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: var(--background-color-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.timeline-speed-menu button {
+  padding: 5px 10px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-color);
+  transition: background-color 0.2s;
+}
+
+.timeline-speed-menu button:hover {
+  background-color: var(--background-color-tertiary);
+}
+
+.timeline-speed-menu button.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.timeline-buffer-info {
+  color: var(--accent-color);
+  font-weight: bold;
 }
