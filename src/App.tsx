@@ -22,7 +22,6 @@ function App() {
                     <Routes>
                         <Route path="/" element={<>
                             <LiveGames/>
-                            <BackfillTest/>
                         </>}/>
                         <Route path="/live/:gameid" element={<LiveGame/>}/>
                         <Route path="/test-series-scoreboard" element={<SeriesScoreboardTest/>}/>

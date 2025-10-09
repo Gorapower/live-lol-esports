@@ -9,7 +9,12 @@ type Props = {
 
 export function ItemsDisplay({ participantId, lastFrame }: Props) {
 
-    const items = lastFrame.participants[participantId].items;
+    const participant = lastFrame.participants[participantId];
+    if (!participant) {
+        return null;
+    }
+
+    const items = participant.items;
 
     /*
         A api da riot não nos retorna nada sobre o arauto, quando
@@ -37,17 +42,17 @@ export function ItemsDisplay({ participantId, lastFrame }: Props) {
 
     return (
         <div className="player-stats-items">
-            {[...Array(6)].map((x, i) => {
+            {[...Array(6)].map((_, i) => {
 
                 if(itemsID[i] !== undefined) {
                     return (
-                        <div className="player-stats-item">
-                            <img src={`${ITEMS_URL}${itemsID[i]}.png`}/>
+                        <div key={`item-${itemsID[i]}-${i}`} className="player-stats-item">
+                            <img src={`${ITEMS_URL}${itemsID[i]}.png`} alt={`Item ${itemsID[i]}`}/>
                         </div>
                     )
                 }else{
                     return (
-                        <div className="player-stats-item"/>
+                        <div key={`empty-${i}`} className="player-stats-item"/>
                     )
                 }
 
@@ -58,7 +63,7 @@ export function ItemsDisplay({ participantId, lastFrame }: Props) {
             {trinket !== -1 ?
                 (
                     <div className="player-stats-item">
-                        <img src={`${ITEMS_URL}${trinket}.png`}/>
+                        <img src={`${ITEMS_URL}${trinket}.png`} alt={`Trinket ${trinket}`}/>
                     </div>
                 )
                 :

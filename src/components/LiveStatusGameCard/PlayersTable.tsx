@@ -28,6 +28,7 @@ import {LiveAPIWatcher} from "./LiveAPIWatcher";
 import { CHAMPIONS_URL } from '../../utils/LoLEsportsAPI';
 import { useResponsive } from '../../hooks/useResponsive';
 import { PlayerTableSimple } from './PlayerTableSimple';
+import { PlayerDetailDrawer } from './PlayerDetailDrawer';
 
 type Props = {
     lastFrameWindow: FrameWindow,
@@ -47,7 +48,8 @@ enum GameState {
 export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, gameDetails, isLive = true, isFinal = false } : Props) {
     const [gameState, setGameState] = useState<GameState>(GameState[lastFrameWindow.gameState as keyof typeof GameState]);
     const [useSimpleView, setUseSimpleView] = useState(false);
-    const { isMobile } = useResponsive();
+    const [expandedPlayer, setExpandedPlayer] = useState<{ participantId: number, teamSide: 'blue' | 'red' } | null>(null);
+    const { isMobile, isTablet } = useResponsive();
 
     // Auto-switch to simple view on mobile
     useEffect(() => {
@@ -98,6 +100,28 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
         setUseSimpleView(!useSimpleView);
     };
 
+    const handlePlayerRowClick = (participantId: number, teamSide: 'blue' | 'red') => {
+        // Only allow one drawer open at a time
+        if (expandedPlayer?.participantId === participantId && expandedPlayer?.teamSide === teamSide) {
+            setExpandedPlayer(null);
+        } else {
+            setExpandedPlayer({ participantId, teamSide });
+        }
+    };
+
+    const closeDrawer = () => {
+        setExpandedPlayer(null);
+    };
+
+    const getPlayerDetails = (participantId: number) => {
+        const participant = lastFrameDetails.participants.find(p => p.participantId === participantId);
+        return participant;
+    };
+
+    const expandedParticipantDetails = expandedPlayer
+        ? getPlayerDetails(expandedPlayer.participantId)
+        : null;
+
     return (
         <div className="status-live-game-card">
 
@@ -120,10 +144,10 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             <img src={blueTeam.image} alt={blueTeam.name}/>
                         </div>
                         <h3>{blueTeam.code}</h3>
-                        <h1>
-                            VS
+                        <div className="live-game-stats-header-status-text">
+                            <h1>VS</h1>
                             <h3>{gameState.toUpperCase()}</h3>
-                        </h1>
+                        </div>
                         <h3>{redTeam.code}</h3>
                         <div className="red-team">
                             <img src={redTeam.image} alt={redTeam.name}/>
@@ -194,14 +218,18 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                     </div>
                     <div className="live-game-stats-header-dragons">
                         <div className="blue-team">
-                            {lastFrameWindow.blueTeam.dragons.map(dragon => (
-                                getDragonSVG(dragon)
+                            {lastFrameWindow.blueTeam.dragons.map((dragon, index) => (
+                                <React.Fragment key={`blue-dragon-${dragon}-${index}`}>
+                                    {getDragonSVG(dragon)}
+                                </React.Fragment>
                             ))}
                         </div>
                         <div className="red-team">
 
-                            {lastFrameWindow.redTeam.dragons.slice().reverse().map(dragon => (
-                                getDragonSVG(dragon)
+                            {lastFrameWindow.redTeam.dragons.slice().reverse().map((dragon, index) => (
+                                <React.Fragment key={`red-dragon-${dragon}-${index}`}>
+                                    {getDragonSVG(dragon)}
+                                </React.Fragment>
                             ))}
                         </div>
                     </div>
@@ -254,9 +282,21 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             <tbody>
                             {lastFrameWindow.blueTeam.participants.map((player: ParticipantWindow) => {
                                 let goldDifference = getGoldDifference(player, "blue", gameMetadata, lastFrameWindow);
-
                                 return (
-                                    <tr>
+                                    <tr
+                                        key={`blue-player-${player.participantId}`}
+                                        className={`player-row ${expandedPlayer?.participantId === player.participantId && expandedPlayer?.teamSide === 'blue' ? 'expanded' : ''}`}
+                                        onClick={() => handlePlayerRowClick(player.participantId, 'blue')}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                handlePlayerRowClick(player.participantId, 'blue');
+                                            }
+                                        }}
+                                        tabIndex={0}
+                                        role="button"
+                                        aria-label={`View details for ${gameMetadata.blueTeamMetadata.participantMetadata[player.participantId - 1].summonerName}`}
+                                    >
                                         <th>
                                             <div className="player-champion-info">
                                                 <img
@@ -270,6 +310,11 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                                                         className=" player-card-player-name">{gameMetadata.blueTeamMetadata.participantMetadata[player.participantId - 1].summonerName}</span>
                                                 </div>
                                             </div>
+                                            {(!isMobile) && (
+                                                <div className="drawer-trigger">
+                                                    <span className="drawer-trigger-icon">▼</span>
+                                                </div>
+                                            )}
                                         </th>
                                         <td>
                                             <MiniHealthBar currentHealth={player.currentHealth} maxHealth={player.maxHealth}/>
@@ -301,6 +346,16 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             })}
                             </tbody>
                         </table>
+
+                        {/* Player Detail Drawer for Blue Team */}
+                        {expandedPlayer?.teamSide === 'blue' && expandedParticipantDetails && (
+                            <PlayerDetailDrawer
+                                participant={expandedParticipantDetails}
+                                teamSide="blue"
+                                isVisible={true}
+                                onClose={closeDrawer}
+                            />
+                        )}
 
                         <table className="status-live-game-card-table">
                             <thead>
@@ -337,9 +392,21 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             <tbody>
                             {lastFrameWindow.redTeam.participants.map((player) => {
                                 let goldDifference = getGoldDifference(player, "red", gameMetadata, lastFrameWindow);
-
                                 return(
-                                    <tr>
+                                    <tr
+                                        key={`red-player-${player.participantId}`}
+                                        className={`player-row ${expandedPlayer?.participantId === player.participantId && expandedPlayer?.teamSide === 'red' ? 'expanded' : ''}`}
+                                        onClick={() => handlePlayerRowClick(player.participantId, 'red')}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                handlePlayerRowClick(player.participantId, 'red');
+                                            }
+                                        }}
+                                        tabIndex={0}
+                                        role="button"
+                                        aria-label={`View details for ${gameMetadata.redTeamMetadata.participantMetadata[player.participantId - 6].summonerName}`}
+                                    >
                                         <th>
                                             <div className="player-champion-info">
                                                 <img
@@ -352,6 +419,11 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                                                     <span className=" player-card-player-name">{gameMetadata.redTeamMetadata.participantMetadata[player.participantId - 6].summonerName}</span>
                                                 </div>
                                             </div>
+                                            {(!isMobile) && (
+                                                <div className="drawer-trigger">
+                                                    <span className="drawer-trigger-icon">▼</span>
+                                                </div>
+                                            )}
                                         </th>
                                         <td>
                                             <MiniHealthBar currentHealth={player.currentHealth} maxHealth={player.maxHealth}/>
@@ -382,6 +454,16 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             })}
                             </tbody>
                         </table>
+
+                        {/* Player Detail Drawer for Red Team */}
+                        {expandedPlayer?.teamSide === 'red' && expandedParticipantDetails && (
+                            <PlayerDetailDrawer
+                                participant={expandedParticipantDetails}
+                                teamSide="red"
+                                isVisible={true}
+                                onClose={closeDrawer}
+                            />
+                        )}
                     </>
                 )}
             </div>

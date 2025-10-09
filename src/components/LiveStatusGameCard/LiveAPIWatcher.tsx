@@ -5,12 +5,9 @@ import {GameMetadata, Participant} from "./types/windowLiveTypes";
 import React, {useEffect, useState} from "react";
 import {ToastContainer, toast} from 'react-toastify';
 import {Frame as FrameWindow} from "./types/windowLiveTypes";
-
-import useSound from "use-sound";
 import {Team} from "./types/detailsPersistentTypes";
 
 // Import audio assets via ESM for Vite compatibility
-import firstblood from "../../assets/audios/firstblood.ogg";
 import kill from "../../assets/audios/campeao_eliminado.ogg";
 import tower_blue from "../../assets/audios/azul_torre_destruida.ogg";
 import tower_red from "../../assets/audios/vermelha_torre_destruida.ogg";
@@ -60,8 +57,6 @@ export function LiveAPIWatcher({ lastFrameWindow, gameMetadata, blueTeam, redTea
         barons: {blue: lastFrameWindow.blueTeam.barons, red: lastFrameWindow.redTeam.barons},
         participants: {blue: lastFrameWindow.blueTeam.participants, red: lastFrameWindow.redTeam.participants}
     })
-
-    const [firstBloodPlay] = useSound(firstblood);
 
     useEffect(() => {
         // Only show notifications and play sounds in live mode
@@ -141,7 +136,7 @@ export function LiveAPIWatcher({ lastFrameWindow, gameMetadata, blueTeam, redTea
             barons: {blue: lastFrameWindow.blueTeam.barons, red: lastFrameWindow.redTeam.barons},
             participants: {blue: lastFrameWindow.blueTeam.participants, red: lastFrameWindow.redTeam.participants},
         })
-    }, [lastFrameWindow.blueTeam.totalKills, lastFrameWindow.blueTeam.dragons.length, lastFrameWindow.blueTeam.inhibitors, lastFrameWindow.redTeam.totalKills, lastFrameWindow.redTeam.dragons.length, lastFrameWindow.redTeam.inhibitors, firstBloodPlay, status.dragons.blue, status.dragons.red, status.barons.blue, status.barons.red, status.inhibitors.blue, status.inhibitors.red, status.towers.blue, status.towers.red, status.participants.blue, status.participants.red, lastFrameWindow.blueTeam.barons, lastFrameWindow.blueTeam.towers, lastFrameWindow.blueTeam.participants, lastFrameWindow.redTeam.barons, lastFrameWindow.redTeam.towers, lastFrameWindow.redTeam.participants, gameMetadata.blueTeamMetadata.participantMetadata, gameMetadata.redTeamMetadata.participantMetadata, blueTeam.image, redTeam.image, isLive]);
+    }, [lastFrameWindow.blueTeam.totalKills, lastFrameWindow.blueTeam.dragons.length, lastFrameWindow.blueTeam.inhibitors, lastFrameWindow.redTeam.totalKills, lastFrameWindow.redTeam.dragons.length, lastFrameWindow.redTeam.inhibitors, status.dragons.blue, status.dragons.red, status.barons.blue, status.barons.red, status.inhibitors.blue, status.inhibitors.red, status.towers.blue, status.towers.red, status.participants.blue, status.participants.red, lastFrameWindow.blueTeam.barons, lastFrameWindow.blueTeam.towers, lastFrameWindow.blueTeam.participants, lastFrameWindow.redTeam.barons, lastFrameWindow.redTeam.towers, lastFrameWindow.redTeam.participants, gameMetadata.blueTeamMetadata.participantMetadata, gameMetadata.redTeamMetadata.participantMetadata, blueTeam.image, redTeam.image, isLive]);
 
     return (
         <ToastContainer/>

@@ -36,12 +36,21 @@ span.mini-current-health {
     align-items: center;
 }
 
-.live-game-stats-header-team-images > h1 {
+.live-game-stats-header-team-images > .live-game-stats-header-status-text {
     flex: 1;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
 }
 
-.live-game-stats-header-team-images > h1 > h3 {
+.live-game-stats-header-status-text > h1,
+.live-game-stats-header-status-text > h3 {
+    margin: 0;
+}
+
+.live-game-stats-header-status-text > h3 {
     font-weight: 500;
     font-size: 1rem;
 }
@@ -465,4 +474,64 @@ Status dragons
     height: 2rem;
 
     margin-right: 1rem;
+}
+
+/*
+    Player Detail Drawer Styles
+*/
+.player-row {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.player-row:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.player-row:focus {
+    outline: 2px solid var(--blue-twitter);
+    outline-offset: -2px;
+}
+
+.player-row.expanded {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.drawer-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+    opacity: 0.6;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.player-row:hover .drawer-trigger {
+    opacity: 1;
+}
+
+.player-row.expanded .drawer-trigger-icon {
+    transform: rotate(180deg);
+}
+
+.drawer-trigger-icon {
+    font-size: 12px;
+    color: var(--text);
+    transition: transform 0.2s;
+}
+
+/* Position the drawer relative to the table */
+.status-live-game-card-table {
+    position: relative;
+}
+
+/* Tablet-specific adjustments for drawer trigger */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .drawer-trigger {
+        margin-left: 4px;
+    }
+    
+    .drawer-trigger-icon {
+        font-size: 10px;
+    }
 }
