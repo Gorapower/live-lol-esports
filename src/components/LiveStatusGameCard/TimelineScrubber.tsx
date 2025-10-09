@@ -1,6 +1,7 @@
 import React from "react";
 import "./styles/playerStatusStyle.css";
 import "./styles/timelineScrubber.css";
+import { useBackfill } from "../Navbar/BackfillContext";
 
 interface TimelineScrubberProps {
   timestamps: number[];
@@ -19,6 +20,8 @@ export function TimelineScrubber({
   disabled,
   isBackfilling,
 }: TimelineScrubberProps) {
+  const { isBackfillEnabled } = useBackfill();
+  
   if (timestamps.length === 0) {
     return null;
   }
@@ -64,6 +67,10 @@ export function TimelineScrubber({
         {isBackfilling && (
           <span className="timeline-status">Loading match history...</span>
         )}
+        
+        {!isBackfillEnabled && (
+          <span className="timeline-status timeline-status-warning">Live Only Mode</span>
+        )}
       </div>
 
       <div className="timeline-slider-container">
@@ -75,8 +82,9 @@ export function TimelineScrubber({
           max={timestamps.length - 1}
           value={currentIndex}
           onChange={handleSliderChange}
-          disabled={disabled}
+          disabled={disabled || !isBackfillEnabled}
           className="timeline-slider"
+          title={!isBackfillEnabled ? "Timeline disabled - backfill is turned off" : ""}
         />
         
         <span className="timeline-time">

@@ -5,6 +5,7 @@ import {ReactComponent as LoLLogoSVG} from '../../assets/images/league-of-legend
 import {Link} from "react-router-dom";
 import { ThemeToggler } from "./ThemeToggler";
 import {SoundToggler} from "./SoundToggler";
+import {BackfillToggler} from "./BackfillToggler";
 
 export function Navbar() {
     return (
@@ -18,6 +19,7 @@ export function Navbar() {
             <div className="settings-container">
                 <SoundToggler/>
                 <ThemeToggler/>
+                <BackfillToggler/>
             </div>
         </nav>
     );

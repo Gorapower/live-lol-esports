@@ -9,6 +9,7 @@ import {Navbar} from "./components/Navbar/Navbar";
 import { useTheme } from './theme/ThemeContext'
 import React from "react";
 import {SeriesScoreboardTest} from "./components/LiveStatusGameCard/SeriesScoreboardTest";
+import {BackfillTest} from "./components/Navbar/BackfillTest";
 
 function App() {
     const { theme } = useTheme();
@@ -19,7 +20,10 @@ function App() {
                 <Navbar/>
                 <div className="container">
                     <Routes>
-                        <Route path="/" element={<LiveGames/>}/>
+                        <Route path="/" element={<>
+                            <LiveGames/>
+                            <BackfillTest/>
+                        </>}/>
                         <Route path="/live/:gameid" element={<LiveGame/>}/>
                         <Route path="/test-series-scoreboard" element={<SeriesScoreboardTest/>}/>
                         <Route path="*" element={<Navigate to="/"/>}/>

@@ -43,6 +43,11 @@
   font-style: italic;
 }
 
+.timeline-status-warning {
+  color: var(--warning-color, #ff9800);
+  font-weight: bold;
+}
+
 .timeline-slider-container {
   display: flex;
   align-items: center;

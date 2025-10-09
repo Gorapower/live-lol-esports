@@ -13,6 +13,7 @@ import {
   findClosestTimestampIndex,
   isTerminalGameState,
 } from "../../utils/timestampUtils";
+import { useBackfill } from "../Navbar/BackfillContext";
 
 interface FrameIndexState {
   framesWindow: Map<number, FrameWindow>;
@@ -72,6 +73,7 @@ const createInitialState = (): FrameIndexState => ({
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function useFrameIndex(gameId: string): FrameIndexReturn {
+  const { isBackfillEnabled } = useBackfill();
   const [state, setState] = useState<FrameIndexState>(() => createInitialState());
   const stateRef = useRef<FrameIndexState>(state);
 
@@ -359,7 +361,8 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
       backfillStartedRef.current ||
       backfillRunningRef.current ||
       cancelBackfillRef.current ||
-      !isMountedRef.current
+      !isMountedRef.current ||
+      !isBackfillEnabled
     ) {
       return;
     }
@@ -371,7 +374,7 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
 
     backfillStartedRef.current = true;
     void runBackfill();
-  }, [runBackfill]);
+  }, [runBackfill, isBackfillEnabled]);
 
   const startLivePolling = useCallback(() => {
     if (!gameId) {
@@ -495,7 +498,7 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
           getISODateMultiplyOf10()
         );
         const mergeResult = mergeFrames(windowFrames, detailFrames, metadata);
-        if (mergeResult.hasFramesAfter) {
+        if (mergeResult.hasFramesAfter && isBackfillEnabled) {
           maybeStartBackfill();
         }
       } catch {
