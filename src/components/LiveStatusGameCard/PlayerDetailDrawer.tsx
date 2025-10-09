@@ -57,23 +57,36 @@ export const PlayerDetailDrawer: React.FC<Props> = ({ participant, teamSide, isV
   
   // Calculate kill participation percentage
   const killParticipationPercent = participant.killParticipation * 100;
-  
-  // Format ability order for display
-  const formatAbilityOrder = () => {
-    const abilities = participant.abilities || [];
-    const abilityOrder: number[] = [0, 0, 0, 0]; // Q, W, E, R
-    
-    abilities.forEach((ability, index) => {
-      const abilityIndex = parseInt(ability);
-      if (abilityIndex >= 1 && abilityIndex <= 4) {
-        abilityOrder[abilityIndex - 1]++;
-      }
-    });
-    
-    return abilityOrder;
+
+  const normalizeAbilityKey = (value?: string) => {
+    if (!value) {
+      return '';
+    }
+    const trimmedValue = value.trim();
+
+    const numericIndex = parseInt(trimmedValue, 10) - 1;
+    if (!Number.isNaN(numericIndex) && numericIndex >= 0 && numericIndex < ABILITY_KEYS.length) {
+      return ABILITY_KEYS[numericIndex];
+    }
+
+    const normalizedValue = trimmedValue.toUpperCase();
+    const abilityMap: Record<string, string> = {
+      Q: 'Q',
+      W: 'W',
+      E: 'E',
+      R: 'R',
+      ABILITY_Q: 'Q',
+      ABILITY_W: 'W',
+      ABILITY_E: 'E',
+      ABILITY_R: 'R'
+    };
+
+    return abilityMap[normalizedValue] || '';
   };
-  
-  const abilityLevels = formatAbilityOrder();
+
+  const abilitySequence = Array.from({ length: 18 }, (_, index) =>
+    normalizeAbilityKey(participant.abilities?.[index])
+  );
   
   return React.createElement(
     'div',
@@ -225,24 +238,18 @@ export const PlayerDetailDrawer: React.FC<Props> = ({ participant, teamSide, isV
             React.createElement('h4', { key: 'abilities-title' }, 'Skill Order'),
             React.createElement(
               'div',
-              { key: 'abilities-grid', className: 'abilities-grid' },
-              ABILITY_KEYS.map((key, index) =>
+              { key: 'abilities-sequence', className: 'abilities-sequence' },
+              abilitySequence.map((abilityKey, index) =>
                 React.createElement(
                   'div',
-                  { key: key, className: 'ability-item' },
-                  [
-                    React.createElement('div', { key: `${key}-key`, className: 'ability-key' }, key),
-                    React.createElement(
-                      'div',
-                      { key: `${key}-levels`, className: 'ability-levels' },
-                      Array.from({ length: 18 }, (_, i) =>
-                        React.createElement('div', {
-                          key: i,
-                          className: `ability-level ${i < abilityLevels[index] ? 'leveled' : ''}`
-                        })
-                      )
-                    )
-                  ]
+                  {
+                    key: index,
+                    className: `ability-square${abilityKey ? ` ability-square-${abilityKey.toLowerCase()}` : ' empty'}`,
+                    'aria-label': abilityKey
+                      ? `Level ${index + 1}: ability ${abilityKey}`
+                      : `Level ${index + 1}: ability not selected`
+                  },
+                  abilityKey
                 )
               )
             )

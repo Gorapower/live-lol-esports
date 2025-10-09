@@ -1,15 +1,18 @@
 .player-detail-drawer {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
+  position: fixed;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
   background: var(--card-color);
   border: 1px solid var(--gray-line);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
   z-index: 100;
   max-width: 600px;
-  margin: 8px auto;
+  width: calc(100% - 32px);
+  margin: 0;
+  max-height: 80vh;
+  overflow: hidden;
   animation: slideDown 0.3s ease-out;
 }
 
@@ -66,6 +69,9 @@
 
 .drawer-content {
   padding: 16px;
+  max-height: calc(80vh - 56px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .stats-section, .runes-section, .abilities-section {
@@ -159,53 +165,34 @@
   border: 1px solid var(--gray-line);
 }
 
-.abilities-grid {
+.abilities-sequence {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(9, minmax(32px, 1fr));
+  gap: 6px;
 }
 
-.ability-item {
+.ability-square {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  background: var(--background-color);
-  border-radius: 6px;
-  padding: 8px;
-  border: 1px solid var(--gray-line);
-}
-
-.ability-key {
-  font-weight: bold;
-  font-size: 16px;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-
-.ability-levels {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(6, 1fr);
-  gap: 2px;
-  width: 100%;
-}
-
-.ability-level {
-  width: 100%;
+  justify-content: center;
   aspect-ratio: 1;
-  background: var(--gray-line);
-  border-radius: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--background-color);
+  border: 1px solid var(--gray-line);
+  border-radius: 4px;
+  text-transform: uppercase;
 }
 
-.ability-level.leveled {
-  background: var(--blue-twitter);
+.ability-square.empty {
+  opacity: 0.4;
 }
 
 /* Responsive adjustments */
 @media (max-width: 1023px) {
   .player-detail-drawer {
-    max-width: 100%;
-    margin: 8px;
+    top: 80px;
   }
   
   .stats-grid {
@@ -218,8 +205,8 @@
     gap: 12px;
   }
   
-  .abilities-grid {
-    gap: 6px;
+  .abilities-sequence {
+    grid-template-columns: repeat(6, minmax(28px, 1fr));
   }
 }
 
