@@ -11,6 +11,7 @@ import {
   toISO,
   toEpochMillis,
   findClosestTimestampIndex,
+  isTerminalGameState,
 } from "../../utils/timestampUtils";
 
 interface FrameIndexState {
@@ -22,6 +23,7 @@ interface FrameIndexState {
   livePointer: number;
   playbackPointer: number | null;
   metadata: GameMetadata | undefined;
+  isFinal: boolean; // New flag to indicate if the game is finished
 }
 
 interface FrameIndexReturn {
@@ -32,6 +34,7 @@ interface FrameIndexReturn {
   hasFirstFrame: boolean;
   isBackfilling: boolean;
   isLive: boolean;
+  isFinal: boolean; // Expose isFinal flag
   selectedTimestamp: number | null;
   currentTimestamp: number | null;
   goLive: () => void;
@@ -49,6 +52,10 @@ const BACKFILL_STEP_MS = 10_000;
 const BACKFILL_DELAY_MS = 200;
 const BACKFILL_RETRY_DELAY_MS = 1_000;
 const LIVE_POLL_INTERVAL_MS = 500;
+const FINAL_STATE_BACKOFF_MS = 60_000; // 1 minute backoff for finished games
+
+// Debug logging flag
+const DEBUG_POLLING = process.env.NODE_ENV === 'development';
 
 const createInitialState = (): FrameIndexState => ({
   framesWindow: new Map(),
@@ -59,6 +66,7 @@ const createInitialState = (): FrameIndexState => ({
   livePointer: -1,
   playbackPointer: null,
   metadata: undefined,
+  isFinal: false,
 });
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -84,6 +92,7 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
   const cancelBackfillRef = useRef(false);
   const backfillCursorRef = useRef<number | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const finalStateBackoffRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -96,6 +105,10 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
+      }
+      if (finalStateBackoffRef.current) {
+        clearTimeout(finalStateBackoffRef.current);
+        finalStateBackoffRef.current = null;
       }
     };
   }, []);
@@ -116,6 +129,15 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
 
       if (!hasPayload && !shouldSetMetadata) {
         return { changed: false, addedEarlier: false, addedLater: false, hasFramesAfter };
+      }
+
+      // Check if any of the new frames indicate a terminal game state
+      let hasTerminalState = false;
+      for (const frame of windowFrames) {
+        if (isTerminalGameState(frame.gameState)) {
+          hasTerminalState = true;
+          break;
+        }
       }
 
       setFrameState((prev) => {
@@ -193,6 +215,9 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
           (prevLatest === null ||
             sortedTimestamps[sortedTimestamps.length - 1] > prevLatest);
 
+        // Update isFinal flag if we detected a terminal state
+        const nextIsFinal = prev.isFinal || hasTerminalState;
+
         return {
           ...prev,
           framesWindow: nextWindow,
@@ -201,6 +226,7 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
           livePointer,
           playbackPointer,
           metadata: metadataToUse,
+          isFinal: nextIsFinal,
         };
       });
 
@@ -357,8 +383,52 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
       pollIntervalRef.current = null;
     }
 
+    if (DEBUG_POLLING) {
+      console.log(`[useFrameIndex] Starting live polling for game ${gameId}`);
+    }
+
     const poll = async () => {
       if (!isMountedRef.current || cancelBackfillRef.current) {
+        if (DEBUG_POLLING) {
+          console.log(`[useFrameIndex] Stopping polling - component unmounted or cancelled`);
+        }
+        return;
+      }
+
+      // Stop polling if the game is in a terminal state
+      if (stateRef.current.isFinal) {
+        if (DEBUG_POLLING) {
+          console.log(`[useFrameIndex] Game ${gameId} is in terminal state, stopping polling`);
+        }
+        
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        
+        // Set up a backoff timer to retry after a delay (in case the game resumes)
+        if (finalStateBackoffRef.current) {
+          clearTimeout(finalStateBackoffRef.current);
+        }
+        
+        if (DEBUG_POLLING) {
+          console.log(`[useFrameIndex] Setting backoff timer for ${FINAL_STATE_BACKOFF_MS}ms`);
+        }
+        
+        finalStateBackoffRef.current = setTimeout(() => {
+          if (!isMountedRef.current || cancelBackfillRef.current) {
+            return;
+          }
+          
+          if (DEBUG_POLLING) {
+            console.log(`[useFrameIndex] Backoff timer expired, resuming polling for game ${gameId}`);
+          }
+          
+          // Reset isFinal flag and resume polling
+          setFrameState(prev => ({ ...prev, isFinal: false }));
+          startLivePolling();
+        }, FINAL_STATE_BACKOFF_MS);
+        
         return;
       }
 
@@ -370,22 +440,41 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
         if (mergeResult.hasFramesAfter) {
           maybeStartBackfill();
         }
-      } catch {
+        
+        // If after merging frames we detect a terminal state, stop polling
+        if (stateRef.current.isFinal && pollIntervalRef.current) {
+          if (DEBUG_POLLING) {
+            console.log(`[useFrameIndex] Detected terminal state after frame merge, stopping polling`);
+          }
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      } catch (error) {
+        if (DEBUG_POLLING) {
+          console.log(`[useFrameIndex] Poll error for game ${gameId}:`, error);
+        }
         // swallow errors; next poll will retry
       }
     };
 
     void poll();
     pollIntervalRef.current = setInterval(poll, LIVE_POLL_INTERVAL_MS);
-  }, [fetchChunk, gameId, maybeStartBackfill, mergeFrames]);
+  }, [fetchChunk, gameId, maybeStartBackfill, mergeFrames, setFrameState]);
 
   useEffect(() => {
+    // Clean up any existing polling and backoff timers
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
+    if (finalStateBackoffRef.current) {
+      clearTimeout(finalStateBackoffRef.current);
+      finalStateBackoffRef.current = null;
+    }
+    
     cancelBackfillRef.current = true;
     backfillRunningRef.current = false;
+    backfillStartedRef.current = false;
     backfillCursorRef.current = null;
 
     if (!gameId) {
@@ -394,6 +483,7 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
       return;
     }
 
+    // Reset for new game
     cancelBackfillRef.current = false;
     backfillStartedRef.current = false;
     backfillCursorRef.current = null;
@@ -424,6 +514,10 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
+      }
+      if (finalStateBackoffRef.current) {
+        clearTimeout(finalStateBackoffRef.current);
+        finalStateBackoffRef.current = null;
       }
     };
   }, [fetchChunk, gameId, maybeStartBackfill, mergeFrames, setFrameState, startLivePolling]);
@@ -500,6 +594,7 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
     hasFirstFrame: state.hasFirstFrame,
     isBackfilling: state.isBackfilling,
     isLive: state.playbackPointer === null,
+    isFinal: state.isFinal,
     selectedTimestamp,
     currentTimestamp,
     goLive,

@@ -33,9 +33,10 @@ type Props = {
     gameMetadata: GameMetadata,
     gameDetails: GameDetails,
     isLive?: boolean, // Add isLive prop to control notifications
+    isFinal?: boolean, // Add isFinal prop to indicate if the game is finished
 }
 
-export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, gameDetails, isLive = true } : Props) {
+export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, gameDetails, isLive = true, isFinal = false } : Props) {
     const [gameState, setGameState] = useState<GameState>(GameState[lastFrameWindow.gameState as keyof typeof GameState]);
 
     useEffect(() => {
@@ -342,7 +343,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                 </table>
             </div>
 
-            <LiveAPIWatcher gameMetadata={gameMetadata} lastFrameWindow={lastFrameWindow} blueTeam={blueTeam} redTeam={redTeam} isLive={isLive}/>
+            <LiveAPIWatcher gameMetadata={gameMetadata} lastFrameWindow={lastFrameWindow} blueTeam={blueTeam} redTeam={redTeam} isLive={isLive && !isFinal}/>
         </div>
     );
 }

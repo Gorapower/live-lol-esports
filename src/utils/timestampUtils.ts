@@ -88,3 +88,21 @@ export function findClosestTimestampIndex(timestamps: number[], targetTimestamp:
   
   return leftDiff < rightDiff ? left : right;
 }
+
+/**
+ * Checks if a gameState indicates the match is finished/completed
+ * @param gameState The gameState string from the API
+ * @returns true if the game is in a terminal state
+ */
+export function isTerminalGameState(gameState: string): boolean {
+  if (!gameState) return false;
+  
+  const terminalStates = [
+    'finished',
+    'completed',
+    'postgame',
+    'post_game'
+  ];
+  
+  return terminalStates.includes(gameState.toLowerCase());
+}

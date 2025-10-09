@@ -173,9 +173,152 @@ This file tracks development tasks for new functionality. Each task includes sco
   - Within one polling cycle of receiving a `gameState` that is terminal, no further window/details requests are sent for that game.
   - The UI shows the final frame data but indicates the game is finished; “Live” controls are disabled until a new live game is selected.
   - Switching to another live game resumes polling immediately; returning to the finished game does not restart polling unless fresh live frames appear.
-  - The app never calls the live endpoints for a finished game more than once per minute after the terminal frame (guard timer/backoff).
+- The app never calls the live endpoints for a finished game more than once per minute after the terminal frame (guard timer/backoff).
 
 - Out of scope
   - Archiving final frames to disk/IndexedDB.
   - Updating persisted schedule metadata outside the live card workflow.
   - Handling forfeits/remakes beyond respecting the API-provided `gameState`.
+
+---
+
+## Task 4 — Series Meta Scoreboard Upgrade
+
+- Goal: Replace the current per-game list with a series-centric header that shows both teams, their logos, live series score, and color-coded game outcomes, leveraging Proposed Feature #3 (Series meta) plus #6 (accurate per-game side mapping).
+
+- Why it matters
+  - Gives viewers instant context on where the series stands without deciphering “Game 1, Game 2…” labels.
+  - Keeps series status synchronized with official LoL Esports data, avoiding manual best-of assumptions.
+  - Provides a consistent look/feel between the schedule cards and the live game view.
+
+- Task tree
+  - **Data plumbing**
+    - Use `match.strategy.count` to determine best-of length and compute required win threshold.
+    - Gather per-game outcomes from `match.games[*]` and/or live frames to know winners and completion state.
+    - Normalize `game.teams[*].side` (feature #6) so we can tag each team with a canonical color per series: first team on the card = “blue theme”, second = “red theme”, regardless of in-game side swaps.
+  - **Series header component**
+    - Design a new `SeriesScoreboard` (or refactor existing selector) that displays team logos/names, win tally (e.g., `2 – 1`), and best-of label.
+    - Highlight the team that has clinched the series once they reach the win threshold; show “Series Final” state for completed series.
+    - Ensure stale game-number chip UI is removed or fully hidden behind the new component.
+  - **Game pills**
+    - Render one pill per played game (do not show unplayed future games).
+    - Fill pill background with the winning team’s theme color; unfinished games retain neutral styling.
+    - Display quick metadata per pill (e.g., `G1`, winner logo, final score). For ongoing games, show live indicator.
+  - **Interactions & responsiveness**
+    - Clicking a pill should still allow selecting historical games when available; disable interaction for games that never occurred.
+    - Maintain accessibility: announce series score changes and mark the clinched team via aria-live or status text.
+  - **Styling**
+    - Derive base colors from existing team palette if available; fall back to blue/red themes tied to scoreboard position.
+    - Ensure contrast on pill text after applying background color; add CSS vars for reuse.
+  - **QA & regression checks**
+    - Test best-of-1, 3, and 5 series with partial and complete game sets.
+    - Verify series resets correctly when switching between matches in the UI.
+    - Confirm that remade/cancelled games (no result) remain excluded from pill list but do not break indexing.
+
+- Acceptance criteria
+  - Live game view renders a series header showing both team logos, names, best-of information, and current win totals.
+  - Only completed or currently-active games appear as pills; each pill’s background reflects the winning team’s assigned theme color.
+  - When a team reaches the win threshold, the scoreboard marks the series as finished and stops showing future scheduled games.
+  - Selecting a game pill updates the underlying frame/game state exactly as the old game-number selector did.
+  - Color assignment is stable per series (same team always blue or red theme) even if that team swapped in-game sides.
+
+- Out of scope
+  - Persisting user-selected team colors beyond the live session.
+  - Implementing hover tooltips for detailed box scores (can be a follow-up).
+  - Updating non-live schedule cards (handled separately when feature #3 is applied globally).
+
+---
+
+## Task 5 — Mobile Simple Player Table
+
+- Goal: Introduce a simplified “mobile” layout for the live player table that surfaces only core stats (player name, champion, HP bar, K/D/A, gold) by default on small screens, while preserving the existing detailed view for tablet/desktop users.
+
+- Why it matters
+  - Current layout overflows on narrow viewports; columns become unreadable and require horizontal scrolling.
+  - Mobile-first users need quick access to essential info without losing context.
+  - Establishes the responsive foundation needed before we add a “detailed” mobile toggle in a follow-up task.
+
+- Task tree
+  - **Responsive breakpoints**
+    - Define viewport breakpoints (e.g., `< 768px = mobile`, `768–1023px = tablet`, `>= 1024px = desktop`).
+    - Determine detection mechanism (CSS media queries plus React state or only CSS).
+  - **Simple layout structure**
+    - Create a `PlayerTableSimple` variant or slot-based layout within `PlayersTable`.
+    - Show columns/rows for: player name, champion (with icon), HP bar, K/D/A, total gold.
+    - Hide items, CS, and gold difference fields in simple mode unless user explicitly expands.
+  - **Mode switching**
+    - Default to simple mode when breakpoint reports mobile.
+    - Maintain base/normal layout as default for tablet/desktop.
+    - Provide UI toggle (e.g., `View details`) for mobile users to reveal full table; remember preference per session if practical.
+  - **Styling & UX**
+    - Ensure touch targets are ≥44px; HP bar remains legible.
+    - Stack or wrap team headers/logos to fit mobile width without clipping.
+    - Confirm toast notifications and live indicators remain visible.
+  - **Integration**
+    - Audit existing CSS modules to avoid regressions; adjust `timelineScrubber` widths if needed.
+    - Update storybook/demo (if available) or add screenshots for QA reference.
+  - **Testing**
+    - Manual QA on iOS Safari, Android Chrome, and desktop resize.
+    - Verify toggling simple/normal modes doesn’t re-trigger polling or re-mount components unexpectedly.
+
+- Acceptance criteria
+  - On viewports below the mobile breakpoint, the simplified table renders by default with only name, champion, HP, K/D/A, and gold visible.
+  - Tablet/desktop view continues to show the current full table without regressions.
+  - Users can toggle from simple to full detail on mobile; state persists while viewing the match.
+  - Layout adapts without causing horizontal scrolling or text overflow on mobile devices.
+
+- Out of scope
+  - Implementing the “detailed mobile” variant (handled in a later task).
+  - Persisting layout preference across sessions or devices.
+  - Refactoring non-player-table components for responsive behavior beyond necessary adjustments.
+
+---
+
+## Task 6 — Advanced Player Detail Drawer
+
+- Goal: Extend the desktop/tablet player table with an expandable “pro” view that reveals advanced player stats, rune loadouts, and skill order (per Proposed Features #8–#10) when the user hovers/clicks on a player row or role indicator.
+
+- Why it matters
+  - Power users want richer context (damage share, vision, runes, ability ranks) without leaving the live page.
+  - Consolidates existing data payloads into a single discovery point, reducing the need for external tools.
+  - Builds on the responsive split from Task 5 by keeping advanced info opt-in and desktop-focused.
+
+- Task tree
+  - **Trigger design**
+    - Decide on interaction model: hover for desktop, tap-to-toggle for touch/tablet.
+    - Reuse role icon or add a “More” affordance to open the drawer.
+  - **Data binding**
+    - Plumb advanced stats from `details.frames[*].participants[*]` (damage share, vision, warding, gold earned, etc.).
+    - Attach rune metadata (`perkMetadata`) and ability order (`abilities[]`) from the same frames.
+    - Ensure fallback handling when fields are missing or still loading.
+  - **UI layout**
+    - Create a dedicated component (e.g., `PlayerDetailDrawer`) to render:
+      - Advanced stat grid (KP, damage share, wards placed/destroyed, etc.).
+      - Rune display (primary/sub styles, keystone icon).
+      - Skill order timeline (18-slot row highlighting maxed ability).
+    - Incorporate subtle transitions so the table height adapts smoothly.
+  - **State management**
+    - Track which player row (if any) is expanded; only one drawer open at a time.
+    - Reset expanded state on game/frame switch to avoid stale data.
+  - **Integration with modes**
+    - Drawer available in normal/desktop mode only; hide/disable when simple mobile mode is active.
+    - Ensure keyboard accessibility (focus, Enter/Space to toggle; ESC to close).
+  - **Styling & UX**
+    - Align visuals with existing theme; respect color roles from Task 4.
+    - Provide tooltips or legend for less obvious stats.
+    - Keep layout responsive so it doesn’t overflow on narrower tablets.
+  - **Testing**
+    - Manual QA across browsers for hover/tap behaviors.
+    - Verify performance impact is minimal (memoize heavy calculations).
+    - Optional unit tests for data formatting helpers.
+
+- Acceptance criteria
+  - Users on desktop/tablet can expand a player row to view advanced stats, rune loadout, and skill order sourced from live details frames.
+  - Only one drawer is open at a time; switching players or closing collapses the previously expanded row cleanly.
+  - Drawer auto-hides when the table switches to simple mobile mode.
+  - Missing data gracefully hides individual sections without breaking layout.
+
+- Out of scope
+  - Surfacing advanced drawer in the mobile simple mode (to be reconsidered later).
+  - Persisting drawer-open state between sessions.
+  - Adding new data fields beyond those already retrieved from live details frames.

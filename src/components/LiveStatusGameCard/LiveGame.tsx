@@ -30,6 +30,7 @@ export function LiveGame() {
         hasFirstFrame,
         isBackfilling,
         isLive,
+        isFinal,
         selectedTimestamp,
         goLive,
         setPlaybackByEpoch,
@@ -178,6 +179,7 @@ export function LiveGame() {
                     gameMetadata={metadata}
                     gameDetails={gameData}
                     isLive={isLive}
+                    isFinal={isFinal}
                 />
             ) : isUpcomingGame ? (
                 <div className="loading-game-container">
