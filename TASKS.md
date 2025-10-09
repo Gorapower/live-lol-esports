@@ -6,6 +6,8 @@ This file tracks development tasks for new functionality. Each task includes sco
 
 ## Task 1 — Full-Match Frame Index & Timeline Scrubber
 
+**Status:** Completed
+
 - Goal: Cache/index all frames for a match in memory, enable a scrubber to navigate from the first frame to the latest (live) or last (finished). Until the first frame is fully backfilled, show only the latest live state.
 
 - User flow
@@ -143,6 +145,8 @@ This file tracks development tasks for new functionality. Each task includes sco
 ---
 
 ## Task 3 — Stop Polling Completed Games
+
+**Status:** Completed
 
 - Goal: Eliminate unnecessary polling once we have captured a frame whose `gameState` indicates the match is finished so we do not hammer the live API when no new data will arrive.
 
