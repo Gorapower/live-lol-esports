@@ -54,8 +54,8 @@
 }
 
 .empty-games-galaxy{
-    margin: 5rem;
-    width: 50%;
+    margin: 1.25rem 0;
+    width: 40%;
 }
 
 .games-list-container {
@@ -84,4 +84,24 @@
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* Compact inline empty state to avoid large gaps */
+.empty-games-inline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    color: var(--text);
+}
+
+.empty-games-inline-icon {
+    width: 1.5rem;
+    height: auto;
+    opacity: 0.9;
+}
+
+.empty-games-inline-text {
+    font-weight: 600;
 }

@@ -20,9 +20,10 @@ import {ReactComponent as InfernalDragonSVG} from '../../assets/images/dragon-in
 import {ReactComponent as CloudDragonSVG} from '../../assets/images/dragon-cloud.svg';
 import {ReactComponent as MountainDragonSVG} from '../../assets/images/dragon-mountain.svg';
 import {ReactComponent as ElderDragonSVG} from '../../assets/images/dragon-elder.svg';
+import {ReactComponent as HextechDragonSVG} from '../../assets/images/dragon-hextech.svg';
+import {ReactComponent as ChemtechDragonSVG} from '../../assets/images/dragon-chemtech.svg';
 import {ItemsDisplay} from "./ItemsDisplay";
 
-import {Helmet} from "react-helmet";
 import {LiveAPIWatcher} from "./LiveAPIWatcher";
 import { CHAMPIONS_URL } from '../../utils/LoLEsportsAPI';
 
@@ -42,7 +43,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
         if(currentGameState !== gameState){
             setGameState(currentGameState);
 
-            toast.info(`Status atual do jogo alterado: ${currentGameState.toUpperCase()}`, {
+            toast.info(`Game status updated: ${currentGameState.toUpperCase()}`, {
                 position: "top-right",
                 autoClose: 15000,
                 hideProgressBar: false,
@@ -59,26 +60,27 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
     const auxBlueTeam = blueTeam
 
     /*
-        As vezes os times continuam errados mesmo apos verificar o ultimo frame,
-        em ligas como TCL, por isso fazemos essa verificação pelo nome
+        Sometimes teams remain wrong even after checking the last frame,
+        in leagues like TCL, so we do this verification by name
     */
     const summonerName = gameMetadata.blueTeamMetadata.participantMetadata[0].summonerName.split(" ");
 
-    if(redTeam.code.startsWith(summonerName[0])){ // Temos que verificar apenas os primeiros caracteres pois os times academy usam o A, a mais na tag mas não nos nomes
+    if(redTeam.code.startsWith(summonerName[0])){ // We need to check only the first characters because academy teams use A, more in the tag but not in the names
         blueTeam = redTeam;
         redTeam = auxBlueTeam;
     }
 
-    const goldPercentage = getGoldPercentage(lastFrameWindow.blueTeam.totalGold, lastFrameWindow.redTeam.totalGold);
+    const winPrediction = getWinPrediction(
+        lastFrameWindow.blueTeam.totalGold,
+        lastFrameWindow.redTeam.totalGold
+    );
 
     document.title = `${blueTeam.name} VS ${redTeam.name}`;
 
     return (
         <div className="status-live-game-card">
 
-            <Helmet>
-                <script src="../../utils/LoLAPIWatcher.js"/>
-            </Helmet>
+            
 
             <div className="status-live-game-card-content">
                 <div className="live-game-stats-header">
@@ -113,7 +115,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             <div className="team-stats gold">
                                 <GoldSVG/>
                                 <span>
-                                    {Number(lastFrameWindow.blueTeam.totalGold).toLocaleString('pt-br')}
+                                    {Number(lastFrameWindow.blueTeam.totalGold).toLocaleString('en-US')}
                                 </span>
                             </div>
                             <div className="team-stats kills">
@@ -137,7 +139,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             <div className="team-stats gold">
                                 <GoldSVG/>
                                 <span>
-                                    {Number(lastFrameWindow.redTeam.totalGold).toLocaleString('pt-br')}
+                                    {Number(lastFrameWindow.redTeam.totalGold).toLocaleString('en-US')}
                                 </span>
                             </div>
                             <div className="team-stats">
@@ -146,9 +148,18 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             </div>
                         </div>
                     </div>
+                    <div className="win-probability-text">
+                        <span className="win-probability-text-blue">
+                            {winPrediction.bluePercent.toFixed(0)}%
+                        </span>
+                        <span className="win-probability-text-label">Win Prediction</span>
+                        <span className="win-probability-text-red">
+                            {winPrediction.redPercent.toFixed(0)}%
+                        </span>
+                    </div>
                     <div className="live-game-stats-header-gold">
-                        <div className="blue-team" style={{flex: goldPercentage.goldBluePercentage}}/>
-                        <div className="red-team" style={{flex: goldPercentage.goldRedPercentage}}/>
+                        <div className="blue-team" style={{flex: winPrediction.flexBlue}}/>
+                        <div className="red-team" style={{flex: winPrediction.flexRed}}/>
                     </div>
                     <div className="live-game-stats-header-dragons">
                         <div className="blue-team">
@@ -172,7 +183,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             <span>{blueTeam.name.toUpperCase()}</span>
                         </th>
                         <th className="table-top-row-vida" title="life">
-                            <span>VIDA</span>
+                            <span>HP</span>
                         </th>
                         <th className="table-top-row-items" title="items">
                             <span>ITEMS</span>
@@ -190,7 +201,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             <span>A</span>
                         </th>
                         <th className="table-top-row" title="gold">
-                            <span>Ouro</span>
+                            <span>GOLD</span>
                         </th>
                         <th className="table-top-row" title="gold difference">
                             <span>+/-</span>
@@ -208,7 +219,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                                         <img
                                             src={`${CHAMPIONS_URL}${gameMetadata.blueTeamMetadata.participantMetadata[player.participantId - 1].championId}.png`}
                                             className="player-champion"
-                                            alt="imagem do campeao"/>
+                                            alt="champion image"/>
                                         <span className=" player-champion-info-level">{player.level}</span>
                                         <div className=" player-champion-info-name">
                                             <span>{gameMetadata.blueTeamMetadata.participantMetadata[player.participantId - 1].championId}</span>
@@ -237,7 +248,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                                 </td>
                                 <td>
                                     <div
-                                        className=" player-stats">{Number(player.totalGold).toLocaleString('pt-br')}</div>
+                                        className=" player-stats">{Number(player.totalGold).toLocaleString('en-US')}</div>
                                 </td>
                                 <td>
                                     <div className={`player-stats player-gold-${goldDifference?.style}`}>{goldDifference.goldDifference}</div>
@@ -255,7 +266,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             <span>{redTeam.name.toUpperCase()}</span>
                         </th>
                         <th className="table-top-row-vida" title="life">
-                            <span>VIDA</span>
+                            <span>HP</span>
                         </th>
                         <th className="table-top-row-items" title="items">
                             <span>ITEMS</span>
@@ -273,7 +284,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             <span>A</span>
                         </th>
                         <th className="table-top-row" title="gold">
-                            <span>Ouro</span>
+                            <span>GOLD</span>
                         </th>
                         <th className="table-top-row" title="gold difference">
                             <span>+/-</span>
@@ -291,7 +302,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                                         <img
                                             src={`${CHAMPIONS_URL}${gameMetadata.redTeamMetadata.participantMetadata[player.participantId - 6].championId}.png`}
                                             className="player-champion"
-                                            alt="imagem do campeao"/>
+                                            alt="champion image"/>
                                         <span className=" player-champion-info-level">{player.level}</span>
                                         <div className=" player-champion-info-name">
                                             <span>{gameMetadata.redTeamMetadata.participantMetadata[player.participantId - 6].championId}</span>
@@ -318,7 +329,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                                     <div className=" player-stats player-stats-kda">{player.assists}</div>
                                 </td>
                                 <td>
-                                    <div className=" player-stats">{Number(player.totalGold).toLocaleString('pt-br')}</div>
+                                    <div className=" player-stats">{Number(player.totalGold).toLocaleString('en-US')}</div>
                                 </td>
                                 <td>
                                     <div className={`player-stats player-gold-${goldDifference?.style}`}>{goldDifference.goldDifference}</div>
@@ -342,7 +353,7 @@ function getGoldDifference(player: ParticipantWindow, side: string, gameMetadata
 
         return {
             style: goldResult > 0 ? "positive" : "negative",
-            goldDifference: goldResult > 0 ? "+" + Number(goldResult).toLocaleString("pt-br") : Number(goldResult).toLocaleString("pt-br")
+            goldDifference: goldResult > 0 ? "+" + Number(goldResult).toLocaleString("en-US") : Number(goldResult).toLocaleString("en-US")
         };
     }else{
         const bluePlayer = frame.blueTeam.participants[player.participantId - 6];
@@ -350,7 +361,7 @@ function getGoldDifference(player: ParticipantWindow, side: string, gameMetadata
 
         return {
             style: goldResult > 0 ? "positive" : "negative",
-            goldDifference: goldResult > 0 ? "+" + Number(goldResult).toLocaleString("pt-br") : Number(goldResult).toLocaleString("pt-br")
+            goldDifference: goldResult > 0 ? "+" + Number(goldResult).toLocaleString("en-US") : Number(goldResult).toLocaleString("en-US")
         };
     }
 }
@@ -361,20 +372,39 @@ function getDragonSVG(dragonName: string){
         case "infernal": return <InfernalDragonSVG className="dragon"/>
         case "cloud": return <CloudDragonSVG className="dragon"/>
         case "mountain": return <MountainDragonSVG className="dragon"/>
+        case "hextech": return <HextechDragonSVG className="dragon"/>
+        case "chemtech": return <ChemtechDragonSVG className="dragon"/>
         case "elder": return <ElderDragonSVG className="dragon"/>
     }
 }
 
-function getGoldPercentage(goldBlue: number, goldRed: number){
+function getWinPrediction(goldBlue: number, goldRed: number) {
     const total = goldBlue + goldRed;
-    return {
-        goldBluePercentage: ((goldBlue/ 100) * total),
-        goldRedPercentage: ((goldRed/ 100) * total),
+
+    if (total <= 0) {
+        return {
+            flexBlue: 1,
+            flexRed: 1,
+            bluePercent: 50,
+            redPercent: 50,
+        };
     }
+
+    const blueShare = goldBlue / total;
+    const redShare = goldRed / total;
+    const bluePercent = Math.min(100, Math.max(0, Math.round(blueShare * 100)));
+    const redPercent = Math.max(0, 100 - bluePercent);
+
+    return {
+        flexBlue: Math.max(blueShare, 0.05),
+        flexRed: Math.max(redShare, 0.05),
+        bluePercent,
+        redPercent,
+    };
 }
 
 enum GameState {
-    in_game = "ao vivo",
-    paused = "pausado",
-    finished = "finalizado"
+    in_game = "LIVE",
+    paused = "PAUSED",
+    finished = "FINISHED"
 }

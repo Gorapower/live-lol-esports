@@ -15,7 +15,11 @@ export const ThemeContext = React.createContext<ThemeContextProps>({
     theme: THEMES["dark"],
 } as ThemeContextProps);
 
-export const ThemeProvider: React.FC = ({children}) => {
+interface ThemeProviderProps {
+    children: React.ReactNode;
+}
+
+export const ThemeProvider: React.FC<ThemeProviderProps> = ({children}) => {
     const [currentTheme, setCurrentTheme] = React.useState<ThemeType>("light");
 
     return (

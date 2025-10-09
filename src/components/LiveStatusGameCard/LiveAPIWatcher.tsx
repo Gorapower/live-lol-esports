@@ -9,16 +9,17 @@ import {Frame as FrameWindow} from "./types/windowLiveTypes";
 import useSound from "use-sound";
 import {Team} from "./types/detailsPersistentTypes";
 
-const firstblood = require("../../assets/audios/firstblood.ogg");
-const kill = require("../../assets/audios/campeao_eliminado.ogg");
-const tower_blue = require("../../assets/audios/azul_torre_destruida.ogg");
-const tower_red = require("../../assets/audios/vermelha_torre_destruida.ogg");
-const dragon_blue = require("../../assets/audios/azul_dragao.ogg");
-const dragon_red = require("../../assets/audios/vermelha_dragao.ogg");
-const baron_blue = require("../../assets/audios/azul_baron.ogg");
-const baron_red = require("../../assets/audios/vermelha_baron.ogg");
-const inib_blue = require("../../assets/audios/azul_inib_destruido.ogg");
-const inib_red = require("../../assets/audios/vermelha_inib_destruido.ogg");
+// Import audio assets via ESM for Vite compatibility
+import firstblood from "../../assets/audios/firstblood.ogg";
+import kill from "../../assets/audios/campeao_eliminado.ogg";
+import tower_blue from "../../assets/audios/azul_torre_destruida.ogg";
+import tower_red from "../../assets/audios/vermelha_torre_destruida.ogg";
+import dragon_blue from "../../assets/audios/azul_dragao.ogg";
+import dragon_red from "../../assets/audios/vermelha_dragao.ogg";
+import baron_blue from "../../assets/audios/azul_baron.ogg";
+import baron_red from "../../assets/audios/vermelha_baron.ogg";
+import inib_blue from "../../assets/audios/azul_inib_destruido.ogg";
+import inib_red from "../../assets/audios/vermelha_inib_destruido.ogg";
 
 type Props = {
     lastFrameWindow: FrameWindow,
@@ -76,55 +77,55 @@ export function LiveAPIWatcher({ lastFrameWindow, gameMetadata, blueTeam, redTea
         let isPlaying = isMuted;
 
         if(status.inhibitors.blue !== lastFrameWindow.blueTeam.inhibitors){
-            createToast(true, isPlaying, inib_red.default, "Destruiu um inibidor", blueTeam.image);
+            createToast(true, isPlaying, inib_red, "Destroyed an inhibitor", blueTeam.image);
             isPlaying = true
         }
 
         if(status.inhibitors.red !== lastFrameWindow.redTeam.inhibitors){
-            createToast(false, isPlaying, inib_blue.default, "Destruiu um Inibidor", redTeam.image);
+            createToast(false, isPlaying, inib_blue, "Destroyed an inhibitor", redTeam.image);
             isPlaying = true
         }
 
         if(status.barons.blue !== lastFrameWindow.blueTeam.barons){
-            createToast(true, isPlaying, baron_blue.default, "Derrotou o barão", blueTeam.image);
+            createToast(true, isPlaying, baron_blue, "Baron taken", blueTeam.image);
             isPlaying = true
         }
 
         if(status.barons.red !== lastFrameWindow.redTeam.barons){
-            createToast(false, isPlaying, baron_red.default, "Derrotou o barão", redTeam.image);
+            createToast(false, isPlaying, baron_red, "Baron taken", redTeam.image);
             isPlaying = true
         }
 
         if(status.dragons.blue !== lastFrameWindow.blueTeam.dragons.length){
-            createToast(true, isPlaying, dragon_blue.default, "Derrotou o dragão", blueTeam.image);
+            createToast(true, isPlaying, dragon_blue, "Dragon taken", blueTeam.image);
             isPlaying = true
         }
 
         if(status.dragons.red !== lastFrameWindow.redTeam.dragons.length){
-            createToast(false, isPlaying, dragon_red.default, "Derrotou o dragão", redTeam.image);
+            createToast(false, isPlaying, dragon_red, "Dragon taken", redTeam.image);
             isPlaying = true
         }
 
         if(status.towers.blue !== lastFrameWindow.blueTeam.towers){
-            createToast(true, isPlaying, tower_red.default, "Destruiu uma torre", blueTeam.image);
+            createToast(true, isPlaying, tower_red, "Destroyed a tower", blueTeam.image);
             isPlaying = true
         }
 
         if(status.towers.red !== lastFrameWindow.redTeam.towers){
-            createToast(false, isPlaying, tower_blue.default, "Destruiu uma torre", redTeam.image);
+            createToast(false, isPlaying, tower_blue, "Destroyed a tower", redTeam.image);
             isPlaying = true
         }
 
         for (let i = 0; i < status.participants.blue.length; i++) {
             if(status.participants.blue[i].kills !== lastFrameWindow.blueTeam.participants[i].kills){
-                createToast(true, isPlaying, kill.default, "Eliminou um inimigo", `http://ddragon.leagueoflegends.com/cdn/11.4.1/img/champion/${gameMetadata.blueTeamMetadata.participantMetadata[status.participants.blue[i].participantId - 1].championId}.png`)
+                createToast(true, isPlaying, kill, "Got a kill", `http://ddragon.leagueoflegends.com/cdn/11.4.1/img/champion/${gameMetadata.blueTeamMetadata.participantMetadata[status.participants.blue[i].participantId - 1].championId}.png`)
                 isPlaying = true
             }
         }
 
         for (let i = 0; i < status.participants.red.length; i++) {
             if(status.participants.red[i].kills !== lastFrameWindow.redTeam.participants[i].kills){
-                createToast(false, isPlaying, kill.default, "Eliminou um inimigo", `http://ddragon.leagueoflegends.com/cdn/11.4.1/img/champion/${gameMetadata.redTeamMetadata.participantMetadata[status.participants.red[i].participantId - 6].championId}.png`)
+                createToast(false, isPlaying, kill, "Got a kill", `http://ddragon.leagueoflegends.com/cdn/11.4.1/img/champion/${gameMetadata.redTeamMetadata.participantMetadata[status.participants.red[i].participantId - 6].championId}.png`)
                 isPlaying = true
             }
         }
@@ -161,7 +162,9 @@ function createToast(blueTeam: boolean, soundIsPlaying: boolean, sound: string, 
             </div>
             , {
                 pauseOnFocusLoss: false,
-                position: toast.POSITION.TOP_LEFT
+                position: toast.POSITION.TOP_LEFT,
+                style: { background: 'var(--blue-twitter)', color: '#FFF' },
+                progressStyle: { background: '#FFF' }
             }
         )
     }else{
@@ -172,7 +175,9 @@ function createToast(blueTeam: boolean, soundIsPlaying: boolean, sound: string, 
             </div>
             , {
                 pauseOnFocusLoss: false,
-                position: toast.POSITION.TOP_RIGHT
+                position: toast.POSITION.TOP_RIGHT,
+                style: { background: 'var(--red)', color: '#FFF' },
+                progressStyle: { background: '#FFF' }
             }
         )
     }
