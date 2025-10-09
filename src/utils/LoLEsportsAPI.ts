@@ -72,5 +72,7 @@ export function getISODateMultiplyOf10() {
   
     date.setSeconds(date.getSeconds() - 60);
   
-    return date.toISOString();
+    // Ensure the ISO string has .000Z at the end
+    const isoString = date.toISOString();
+    return isoString.replace(/\.\d+Z$/, '.000Z');
 }

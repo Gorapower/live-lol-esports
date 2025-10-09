@@ -2,9 +2,6 @@ import './styles/playerStatusStyle.css'
 
 import {
     getGameDetails,
-    getISODateMultiplyOf10,
-    getLiveDetailsGame,
-    getLiveWindowGame,
 } from "../../utils/LoLEsportsAPI";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GameMetadata, Frame as FrameWindow } from "./types/windowLiveTypes";
@@ -13,17 +10,30 @@ import { PlayersTable } from "./PlayersTable";
 import { Frame as FrameDetails } from "./types/detailsLiveTypes";
 import { GameDetails } from "./types/detailsPersistentTypes";
 import { useParams } from "react-router-dom";
+import { useFrameIndex } from "./useFrameIndex";
+import { TimelineScrubber } from "./TimelineScrubber";
 
 export function LiveGame() {
-    const [lastFrameWindow, setLastFrameWindow] = useState<FrameWindow>();
-    const [lastFrameDetails, setLastFrameDetails] = useState<FrameDetails>();
     const [gameData, setGameData] = useState<GameDetails>();
-    const [metadata, setMetadata] = useState<GameMetadata>();
     const [selectedGameNumber, setSelectedGameNumber] = useState<number>();
     const [selectedGameId, setSelectedGameId] = useState<string>();
 
     const { gameid } = useParams<{ gameid: string }>();
     const matchId = gameid || "";
+
+    // Use our new frame index hook for frame management
+    const {
+        currentWindow,
+        currentDetails,
+        currentMetadata,
+        timestamps,
+        hasFirstFrame,
+        isBackfilling,
+        isLive,
+        selectedTimestamp,
+        goLive,
+        setPlaybackByEpoch,
+    } = useFrameIndex(selectedGameId || "");
 
     const selectedGameState = useMemo(() => {
         if (!gameData || selectedGameNumber === undefined) return undefined;
@@ -42,9 +52,7 @@ export function LiveGame() {
     }, [selectedGameState]);
 
     const resetFrames = useCallback(() => {
-        setLastFrameWindow(undefined);
-        setLastFrameDetails(undefined);
-        setMetadata(undefined);
+        // Frame management is now handled by useFrameIndex hook
     }, []);
 
     useEffect(() => {
@@ -100,55 +108,7 @@ export function LiveGame() {
         };
     }, [matchId, resetFrames]);
 
-    useEffect(() => {
-        if (!selectedGameId) {
-            return;
-        }
-
-        resetFrames();
-
-        let isMounted = true;
-
-        const fetchWindow = () => {
-            const date = getISODateMultiplyOf10();
-            getLiveWindowGame(selectedGameId, date)
-                .then((response) => {
-                    if (!isMounted) return;
-                    const frames = response.data.frames;
-                    if (!Array.isArray(frames) || frames.length === 0) return;
-
-                    setLastFrameWindow(frames[frames.length - 1]);
-                    setMetadata(response.data.gameMetadata);
-                })
-                .catch(() => {});
-        };
-
-        const fetchDetails = () => {
-            const date = getISODateMultiplyOf10();
-            getLiveDetailsGame(selectedGameId, date)
-                .then((response) => {
-                    if (!isMounted) return;
-                    const frames = response.data.frames;
-                    if (!Array.isArray(frames) || frames.length === 0) return;
-
-                    setLastFrameDetails(frames[frames.length - 1]);
-                })
-                .catch(() => {});
-        };
-
-        fetchWindow();
-        fetchDetails();
-
-        const windowIntervalID = setInterval(() => {
-            fetchWindow();
-            fetchDetails();
-        }, 500);
-
-        return () => {
-            isMounted = false;
-            clearInterval(windowIntervalID);
-        };
-    }, [selectedGameId, resetFrames]);
+    // Frame fetching is now handled by the useFrameIndex hook
 
     const handleGameSelection = useCallback(
         (gameNumber: number) => {
@@ -187,21 +147,37 @@ export function LiveGame() {
         );
     }, [gameData, handleGameSelection, selectedGameNumber]);
 
+    // Use metadata from the hook
+    const metadata = currentMetadata;
+
     return (
         <div>
             {/* Game selector (series) */}
             {gameSelector}
 
+            {/* Timeline Scrubber */}
+            {selectedGameId && (
+                <TimelineScrubber
+                    timestamps={timestamps}
+                    value={selectedTimestamp}
+                    onChange={setPlaybackByEpoch}
+                    onLive={goLive}
+                    disabled={!hasFirstFrame}
+                    isBackfilling={isBackfilling}
+                />
+            )}
+
             {/* Content */}
-            {lastFrameWindow !== undefined &&
-            lastFrameDetails !== undefined &&
+            {currentWindow !== undefined &&
+            currentDetails !== undefined &&
             metadata !== undefined &&
             gameData !== undefined ? (
                 <PlayersTable
-                    lastFrameWindow={lastFrameWindow}
-                    lastFrameDetails={lastFrameDetails}
+                    lastFrameWindow={currentWindow}
+                    lastFrameDetails={currentDetails}
                     gameMetadata={metadata}
                     gameDetails={gameData}
+                    isLive={isLive}
                 />
             ) : isUpcomingGame ? (
                 <div className="loading-game-container">

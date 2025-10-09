@@ -26,6 +26,7 @@ type Props = {
     gameMetadata: GameMetadata,
     blueTeam: Team,
     redTeam: Team,
+    isLive?: boolean, // Add isLive prop to control notifications
 }
 
 type StatusWatcher = {
@@ -51,7 +52,7 @@ type StatusWatcher = {
     }
 }
 
-export function LiveAPIWatcher({ lastFrameWindow, gameMetadata, blueTeam, redTeam } : Props) {
+export function LiveAPIWatcher({ lastFrameWindow, gameMetadata, blueTeam, redTeam, isLive = true } : Props) {
     const [status, setStatus] = useState<StatusWatcher>({
         dragons: {blue: lastFrameWindow.blueTeam.dragons.length, red: lastFrameWindow.redTeam.dragons.length},
         inhibitors: {blue: lastFrameWindow.blueTeam.inhibitors, red: lastFrameWindow.redTeam.inhibitors},
@@ -63,6 +64,9 @@ export function LiveAPIWatcher({ lastFrameWindow, gameMetadata, blueTeam, redTea
     const [firstBloodPlay] = useSound(firstblood);
 
     useEffect(() => {
+        // Only show notifications and play sounds in live mode
+        if (!isLive) return;
+
         const soundData = localStorage.getItem("sound");
         let isMuted = false;
         if(soundData) {
@@ -137,7 +141,7 @@ export function LiveAPIWatcher({ lastFrameWindow, gameMetadata, blueTeam, redTea
             barons: {blue: lastFrameWindow.blueTeam.barons, red: lastFrameWindow.redTeam.barons},
             participants: {blue: lastFrameWindow.blueTeam.participants, red: lastFrameWindow.redTeam.participants},
         })
-    }, [lastFrameWindow.blueTeam.totalKills, lastFrameWindow.blueTeam.dragons.length, lastFrameWindow.blueTeam.inhibitors, lastFrameWindow.redTeam.totalKills, lastFrameWindow.redTeam.dragons.length, lastFrameWindow.redTeam.inhibitors, firstBloodPlay, status.dragons.blue, status.dragons.red, status.barons.blue, status.barons.red, status.inhibitors.blue, status.inhibitors.red, status.towers.blue, status.towers.red, status.participants.blue, status.participants.red, lastFrameWindow.blueTeam.barons, lastFrameWindow.blueTeam.towers, lastFrameWindow.blueTeam.participants, lastFrameWindow.redTeam.barons, lastFrameWindow.redTeam.towers, lastFrameWindow.redTeam.participants, gameMetadata.blueTeamMetadata.participantMetadata, gameMetadata.redTeamMetadata.participantMetadata, blueTeam.image, redTeam.image]);
+    }, [lastFrameWindow.blueTeam.totalKills, lastFrameWindow.blueTeam.dragons.length, lastFrameWindow.blueTeam.inhibitors, lastFrameWindow.redTeam.totalKills, lastFrameWindow.redTeam.dragons.length, lastFrameWindow.redTeam.inhibitors, firstBloodPlay, status.dragons.blue, status.dragons.red, status.barons.blue, status.barons.red, status.inhibitors.blue, status.inhibitors.red, status.towers.blue, status.towers.red, status.participants.blue, status.participants.red, lastFrameWindow.blueTeam.barons, lastFrameWindow.blueTeam.towers, lastFrameWindow.blueTeam.participants, lastFrameWindow.redTeam.barons, lastFrameWindow.redTeam.towers, lastFrameWindow.redTeam.participants, gameMetadata.blueTeamMetadata.participantMetadata, gameMetadata.redTeamMetadata.participantMetadata, blueTeam.image, redTeam.image, isLive]);
 
     return (
         <ToastContainer/>

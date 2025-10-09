@@ -32,9 +32,10 @@ type Props = {
     lastFrameDetails: FrameDetails,
     gameMetadata: GameMetadata,
     gameDetails: GameDetails,
+    isLive?: boolean, // Add isLive prop to control notifications
 }
 
-export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, gameDetails } : Props) {
+export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, gameDetails, isLive = true } : Props) {
     const [gameState, setGameState] = useState<GameState>(GameState[lastFrameWindow.gameState as keyof typeof GameState]);
 
     useEffect(() => {
@@ -341,7 +342,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                 </table>
             </div>
 
-            <LiveAPIWatcher gameMetadata={gameMetadata} lastFrameWindow={lastFrameWindow} blueTeam={blueTeam} redTeam={redTeam}/>
+            <LiveAPIWatcher gameMetadata={gameMetadata} lastFrameWindow={lastFrameWindow} blueTeam={blueTeam} redTeam={redTeam} isLive={isLive}/>
         </div>
     );
 }

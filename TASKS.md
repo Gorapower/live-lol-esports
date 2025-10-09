@@ -139,3 +139,43 @@ This file tracks development tasks for new functionality. Each task includes sco
   - Average inter‑frame display interval matches `Δ rfc460Timestamp` within ±100ms (subject to clamps and drift control).
   - Playback maintains ≈10s lag during steady state; catches up smoothly if ingestion stalls.
   - Switching to scrub mode pauses live scheduler; `Go Live` resumes within 500ms.
+
+---
+
+## Task 3 — Stop Polling Completed Games
+
+- Goal: Eliminate unnecessary polling once we have captured a frame whose `gameState` indicates the match is finished so we do not hammer the live API when no new data will arrive.
+
+- Why it matters
+  - Reduces wasted network traffic and Riot API quota usage.
+  - Prevents duplicate toast notifications and timeline jitter after the nexus falls.
+  - Makes it cheaper to keep finished games open in multiple tabs or on shared displays.
+
+- Task tree
+  - **Detection**
+    - Normalize `gameState` strings from both window/details frames (expect `finished`, `postgame`, or `completed`).
+    - Fall back to `gameMetadata.gameState` or persisted schedule status if live frames lag.
+  - **Polling lifecycle**
+    - Teach `useFrameIndex` / `LiveAPIWatcher` to stop scheduling new `getLiveWindowGame` / `getLiveDetailsGame` calls once a terminal state is observed.
+    - Persist the terminal frame in state and mark the hook as `{ isLive: false, isFinal: true }`.
+    - Ensure timers/intervals are cleared and no retries fire while in final state.
+  - **UI sync**
+    - Bubble `isFinal` through `PlayersTable` / `LiveGame` so playback controls disable or switch to “Final” mode.
+    - Skip live-only behaviors (e.g., kill toasts, timeline auto-advance) when `isFinal` is true.
+  - **Reset path**
+    - On game switch or manual “Go Live” for a different match, re-enable polling from a clean slate.
+    - Cover edge case where a finished game briefly resumes (e.g., remakes) by rearming polling if fresh frames with non-terminal `gameState` arrive.
+  - **Instrumentation & QA**
+    - Add lightweight debug logging (behind a flag) to confirm polling stop/start transitions.
+    - Optional: unit test the hook’s state machine to verify intervals clear on final state.
+
+- Acceptance criteria
+  - Within one polling cycle of receiving a `gameState` that is terminal, no further window/details requests are sent for that game.
+  - The UI shows the final frame data but indicates the game is finished; “Live” controls are disabled until a new live game is selected.
+  - Switching to another live game resumes polling immediately; returning to the finished game does not restart polling unless fresh live frames appear.
+  - The app never calls the live endpoints for a finished game more than once per minute after the terminal frame (guard timer/backoff).
+
+- Out of scope
+  - Archiving final frames to disk/IndexedDB.
+  - Updating persisted schedule metadata outside the live card workflow.
+  - Handling forfeits/remakes beyond respecting the API-provided `gameState`.
