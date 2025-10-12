@@ -49,7 +49,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
     const [gameState, setGameState] = useState<GameState>(GameState[lastFrameWindow.gameState as keyof typeof GameState]);
     const [useSimpleView, setUseSimpleView] = useState(false);
     const [expandedPlayer, setExpandedPlayer] = useState<{ participantId: number, teamSide: 'blue' | 'red' } | null>(null);
-    const { isMobile, isTablet } = useResponsive();
+    const { isMobile } = useResponsive();
 
     // Auto-switch to simple view on mobile
     useEffect(() => {
@@ -57,7 +57,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
     }, [isMobile]);
 
     useEffect(() => {
-        let currentGameState: GameState = GameState[lastFrameWindow.gameState as keyof typeof GameState]
+        const currentGameState: GameState = GameState[lastFrameWindow.gameState as keyof typeof GameState]
 
         if(currentGameState !== gameState){
             setGameState(currentGameState);
@@ -91,7 +91,17 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
 
     const winPrediction = getWinPrediction(
         lastFrameWindow.blueTeam.totalGold,
-        lastFrameWindow.redTeam.totalGold
+        lastFrameWindow.redTeam.totalGold,
+        lastFrameWindow.blueTeam.towers,
+        lastFrameWindow.redTeam.towers,
+        lastFrameWindow.blueTeam.inhibitors,
+        lastFrameWindow.redTeam.inhibitors,
+        lastFrameWindow.blueTeam.barons,
+        lastFrameWindow.redTeam.barons,
+        lastFrameWindow.blueTeam.dragons,
+        lastFrameWindow.redTeam.dragons,
+        lastFrameWindow.blueTeam.totalKills,
+        lastFrameWindow.redTeam.totalKills
     );
 
     document.title = `${blueTeam.name} VS ${redTeam.name}`;
@@ -281,7 +291,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             </thead>
                             <tbody>
                             {lastFrameWindow.blueTeam.participants.map((player: ParticipantWindow) => {
-                                let goldDifference = getGoldDifference(player, "blue", gameMetadata, lastFrameWindow);
+                                const goldDifference = getGoldDifference(player, "blue", gameMetadata, lastFrameWindow);
                                 return (
                                     <tr
                                         key={`blue-player-${player.participantId}`}
@@ -391,7 +401,7 @@ export function PlayersTable({ lastFrameWindow, lastFrameDetails, gameMetadata, 
                             </thead>
                             <tbody>
                             {lastFrameWindow.redTeam.participants.map((player) => {
-                                let goldDifference = getGoldDifference(player, "red", gameMetadata, lastFrameWindow);
+                                const goldDifference = getGoldDifference(player, "red", gameMetadata, lastFrameWindow);
                                 return(
                                     <tr
                                         key={`red-player-${player.participantId}`}
@@ -505,10 +515,23 @@ function getDragonSVG(dragonName: string){
     }
 }
 
-function getWinPrediction(goldBlue: number, goldRed: number) {
-    const total = goldBlue + goldRed;
+function getWinPrediction(
+    goldBlue: number,
+    goldRed: number,
+    towersBlue: number,
+    towersRed: number,
+    inhibitorsBlue: number,
+    inhibitorsRed: number,
+    baronsBlue: number,
+    baronsRed: number,
+    dragonsBlue: string[],
+    dragonsRed: string[],
+    killsBlue: number,
+    killsRed: number
+) {
+    const totalGold = goldBlue + goldRed;
 
-    if (total <= 0) {
+    if (totalGold <= 0) {
         return {
             flexBlue: 1,
             flexRed: 1,
@@ -517,14 +540,87 @@ function getWinPrediction(goldBlue: number, goldRed: number) {
         };
     }
 
-    const blueShare = goldBlue / total;
-    const redShare = goldRed / total;
-    const bluePercent = Math.min(100, Math.max(0, Math.round(blueShare * 100)));
-    const redPercent = Math.max(0, 100 - bluePercent);
-
+    // Gold remains the main indicator of win probability.
+    // Before the gold curve plateaus, a 10k lead should represent ~85% confidence.
+    const goldDifference = goldBlue - goldRed;
+    const GOLD_DOMINANT_DIFF = 10000;
+    const GOLD_PLATEAU_START = 60000; // combined team gold where advantages begin to flatten
+    const GOLD_PLATEAU_MAX_BOOST = 2.5; // amplifies early-game gold swings
+    const GOLD_MIN_IMPORTANCE = 0.45; // late-game gold still matters, just less
+    const LOGIT_TARGET = Math.log(0.85 / 0.15); // ~1.73, 10k lead => 85% pre-plateau
+    const GOLD_BASE_SCORE = LOGIT_TARGET / 3; // align with sigmoid(x*3) below
+    
+    const rawGoldMultiplier = GOLD_PLATEAU_START / Math.max(totalGold, 1);
+    const clampedGoldMultiplier = Math.min(
+        GOLD_PLATEAU_MAX_BOOST,
+        Math.max(GOLD_MIN_IMPORTANCE, rawGoldMultiplier)
+    );
+    const effectiveGoldDifference = goldDifference * clampedGoldMultiplier;
+    const goldAdvantageScore = (effectiveGoldDifference / GOLD_DOMINANT_DIFF) * GOLD_BASE_SCORE;
+    
+    // Tower advantage (each tower is worth about 2% win probability)
+    const towerDifference = towersBlue - towersRed;
+    const towerAdvantageScore = towerDifference * 0.02;
+    
+    // Inhibitor advantage (each inhibitor is worth about 8% win probability)
+    const inhibitorDifference = inhibitorsBlue - inhibitorsRed;
+    const inhibitorAdvantageScore = inhibitorDifference * 0.08;
+    
+    // Baron advantage (each baron is worth about 5% win probability)
+    const baronDifference = baronsBlue - baronsRed;
+    const baronAdvantageScore = baronDifference * 0.05;
+    
+    // Dragon advantage
+    // Regular dragons: 1.5% each
+    // Elder dragon: 5%
+    const calculateDragonScore = (dragons: string[]) => {
+        let score = 0;
+        dragons.forEach(dragon => {
+            if (dragon === "elder") {
+                score += 0.05;
+            } else {
+                score += 0.015;
+            }
+        });
+        return score;
+    };
+    
+    const dragonScoreBlue = calculateDragonScore(dragonsBlue);
+    const dragonScoreRed = calculateDragonScore(dragonsRed);
+    const dragonAdvantageScore = dragonScoreBlue - dragonScoreRed;
+    
+    // Kill advantage (diminishing returns based on total kills)
+    const totalKills = killsBlue + killsRed;
+    let killImportance = 1.0;
+    if (totalKills > 10) {
+        killImportance = Math.max(0.3, 1.0 - (totalKills - 10) / 40);
+    }
+    
+    const killDifference = killsBlue - killsRed;
+    const killAdvantageScore = (killDifference / Math.max(1, totalKills)) * killImportance * 0.1;
+    
+    // Combine all advantages
+    const totalAdvantage = goldAdvantageScore + towerAdvantageScore +
+                        inhibitorAdvantageScore + baronAdvantageScore +
+                        dragonAdvantageScore + killAdvantageScore;
+    
+    // Apply sigmoid function to get probabilities between 0 and 1
+    // This ensures we never reach 100% certainty
+    const sigmoid = (x: number) => 1 / (1 + Math.exp(-x * 3)); // Multiply by 3 for steeper curve
+    
+    let blueWinProbability = sigmoid(totalAdvantage);
+    
+    // Cap extreme probabilities (never 100% certain)
+    blueWinProbability = Math.max(0.05, Math.min(0.95, blueWinProbability));
+    
+    const redWinProbability = 1 - blueWinProbability;
+    
+    const bluePercent = Math.round(blueWinProbability * 100);
+    const redPercent = Math.round(redWinProbability * 100);
+    
     return {
-        flexBlue: Math.max(blueShare, 0.05),
-        flexRed: Math.max(redShare, 0.05),
+        flexBlue: Math.max(blueWinProbability, 0.05),
+        flexRed: Math.max(redWinProbability, 0.05),
         bluePercent,
         redPercent,
     };

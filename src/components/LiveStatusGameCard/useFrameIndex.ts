@@ -64,7 +64,6 @@ interface MergeResult {
   addedEarlier: boolean;
   addedLater: boolean;
   hasFramesAfter: boolean;
-  newTimestamps: number[];
 }
 
 const BACKFILL_STEP_MS = 10_000;
@@ -178,7 +177,7 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
       const shouldSetMetadata = Boolean(metadata && !stateRef.current.metadata);
 
       if (!hasPayload && !shouldSetMetadata) {
-        return { changed: false, addedEarlier: false, addedLater: false, hasFramesAfter, newTimestamps: [] };
+        return { changed: false, addedEarlier: false, addedLater: false, hasFramesAfter };
       }
 
       // Check if any of the new frames indicate a terminal game state
@@ -293,6 +292,31 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
           }
         }
 
+        // Update play queue with any newly appended frames while in live mode
+        let playQueue = prev.playQueue;
+        if (prev.playbackPointer === null && newLaterFrames.size > 0) {
+          const newLaterSorted = Array.from(newLaterFrames).sort((a, b) => a - b);
+          const lastQueuedIndex =
+            prev.playQueue.length > 0
+              ? prev.playQueue[prev.playQueue.length - 1]
+              : displayIndex >= 0
+                ? displayIndex
+                : livePointer;
+
+          const newIndices: number[] = [];
+          for (const ts of newLaterSorted) {
+            const newIndex = sortedTimestamps.indexOf(ts);
+            if (newIndex > lastQueuedIndex) {
+              newIndices.push(newIndex);
+            }
+          }
+
+          if (newIndices.length > 0) {
+            const combinedQueue = [...prev.playQueue, ...newIndices];
+            playQueue = Array.from(new Set(combinedQueue)).sort((a, b) => a - b);
+          }
+        }
+
         changed = true;
         addedEarlier =
           sortedTimestamps.length > 0 &&
@@ -315,12 +339,11 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
           displayIndex,
           metadata: metadataToUse,
           isFinal: nextIsFinal,
+          playQueue,
         };
       });
 
-      const newTimestamps = Array.from(newLaterFrames).sort((a, b) => a - b);
-
-      return { changed, addedEarlier, addedLater, hasFramesAfter, newTimestamps };
+      return { changed, addedEarlier, addedLater, hasFramesAfter };
     },
     [setFrameState]
   );
@@ -470,34 +493,6 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
 
     scheduleNextFrame();
   }, [scheduleNextFrame]);
-
-  const addToPlayQueue = useCallback((newTimestamps: number[]) => {
-    if (!isMountedRef.current) return;
-
-    setFrameState(prev => {
-      if (prev.playbackPointer !== null) return prev; // Don't queue in scrub mode
-
-      const lastQueuedIndex = prev.playQueue.length > 0 ?
-        prev.playQueue[prev.playQueue.length - 1] :
-        prev.displayIndex;
-
-      const newIndices: number[] = [];
-      for (const ts of newTimestamps) {
-        const index = prev.orderedTimestamps.indexOf(ts);
-        if (index > lastQueuedIndex) {
-          newIndices.push(index);
-        }
-      }
-
-      const combinedQueue = [...prev.playQueue, ...newIndices];
-      const uniqueQueue = Array.from(new Set(combinedQueue)).sort((a, b) => a - b);
-
-      return {
-        ...prev,
-        playQueue: uniqueQueue
-      };
-    });
-  }, []);
 
   // Live playback control functions
   const pauseLive = useCallback(() => {
@@ -710,15 +705,6 @@ export function useFrameIndex(gameId: string): FrameIndexReturn {
         const mergeResult = mergeFrames(windowFrames, detailFrames, metadata);
         if (mergeResult.hasFramesAfter) {
           maybeStartBackfill();
-        }
-        
-        // Add new frames to play queue
-        if (
-          mergeResult.changed &&
-          mergeResult.addedLater &&
-          mergeResult.newTimestamps.length > 0
-        ) {
-          addToPlayQueue(mergeResult.newTimestamps);
         }
         
         // Start scheduler if we have frames and we're in live mode
