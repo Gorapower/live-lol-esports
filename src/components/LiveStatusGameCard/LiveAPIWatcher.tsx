@@ -8,15 +8,15 @@ import {Frame as FrameWindow} from "./types/windowLiveTypes";
 import {Team} from "./types/detailsPersistentTypes";
 
 // Import audio assets via ESM for Vite compatibility
-import kill from "../../assets/audios/campeao_eliminado.ogg";
-import tower_blue from "../../assets/audios/azul_torre_destruida.ogg";
-import tower_red from "../../assets/audios/vermelha_torre_destruida.ogg";
-import dragon_blue from "../../assets/audios/azul_dragao.ogg";
-import dragon_red from "../../assets/audios/vermelha_dragao.ogg";
-import baron_blue from "../../assets/audios/azul_baron.ogg";
-import baron_red from "../../assets/audios/vermelha_baron.ogg";
-import inib_blue from "../../assets/audios/azul_inib_destruido.ogg";
-import inib_red from "../../assets/audios/vermelha_inib_destruido.ogg";
+import kill from "../../assets/audios/champion_killed.ogg";
+import tower_blue from "../../assets/audios/blue_tower_destroyed.ogg";
+import tower_red from "../../assets/audios/red_tower_destroyed.ogg";
+import dragon_blue from "../../assets/audios/blue_dragon.ogg";
+import dragon_red from "../../assets/audios/red_dragon.ogg";
+import baron_blue from "../../assets/audios/blue_baron.ogg";
+import baron_red from "../../assets/audios/red_baron.ogg";
+import inib_blue from "../../assets/audios/blue_inib_destroyed.ogg";
+import inib_red from "../../assets/audios/red_inib_destroyed.ogg";
 
 type Props = {
     lastFrameWindow: FrameWindow,
